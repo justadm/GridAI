@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import 'dotenv/config';
 import path from 'path';
 import fs from 'fs';
 import express from 'express';
@@ -25,10 +26,14 @@ async function bootstrap() {
   if (!isProd) {
     vite = await createViteServer({
       root,
+      configFile: path.join(root, 'vite.config.ts'),
       server: {
         middlewareMode: true,
         allowedHosts: true,
         host: true
+      },
+      ssr: {
+        noExternal: ['vue', 'vue-router']
       },
       appType: 'custom'
     });
