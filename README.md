@@ -158,6 +158,7 @@ npm install
 ```bash
 cp .env.example .env
 ```
+Если `.env` отсутствует, при запуске будет автоматически создан из `.env.example`.
 
 3. Заполнить переменные:
 - `TELEGRAM_BOT_TOKEN`
