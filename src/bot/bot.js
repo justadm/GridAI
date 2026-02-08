@@ -649,6 +649,11 @@ function startBot() {
       return;
     }
 
+    if (/(.)\1{2,}/.test(text)) {
+      await ctx.reply('Запрос выглядит случайным. Пример: «Backend, 3+ года, Node.js, от 200к».');
+      return;
+    }
+
     try {
       if (state === STATE.AWAIT_SEARCH) {
         setState(ctx.from.id, STATE.IDLE);
