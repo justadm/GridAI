@@ -11,7 +11,10 @@ const SRPortal = (() => {
 
   const loadJson = async page => {
     try {
-      const res = await fetch(`../data/${page}.json`, { cache: 'no-store' });
+      const base = window.SR_API_BASE || '../data';
+      const useJson = !base.includes('/api');
+      const url = useJson ? `${base}/${page}.json` : `${base}/${page}`;
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) return null;
       return await res.json();
     } catch {

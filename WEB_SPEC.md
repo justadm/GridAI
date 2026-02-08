@@ -101,36 +101,153 @@
 
 ---
 
-## 4) API контракты (черновой список)
+## 4) API контракты (v1, черновик)
 
-### Auth
-- `POST /api/auth/login` → magic link
-- `POST /api/auth/verify` → подтверждение
+### 4.1 Общие правила
+- **Base URL:** `/api/v1`
+- **Auth:** `Authorization: Bearer <token>`
+- **Пагинация:** `limit` (по умолчанию 20), `offset`
+- **Ошибка (единый формат):**
+  ```json
+  {
+    "error": {
+      "code": "VALIDATION_ERROR",
+      "message": "Invalid role",
+      "details": {"field": "role"}
+    }
+  }
+  ```
 
-### Reports
-- `GET /api/reports` → список отчётов
-- `POST /api/reports` → создать отчёт
-- `GET /api/reports/:id` → детали
-- `GET /api/reports/:id/export` → PDF/CSV
+### 4.2 Схемы (упрощённо)
+**Report**
+```json
+{
+  "id": "rep_123",
+  "org_id": "org_1",
+  "type": "market|competitors|template",
+  "role": "Backend Node.js",
+  "level": "middle",
+  "city": "Москва",
+  "schedule": "remote|office|hybrid",
+  "employment": "full|part|project",
+  "salary_min": 180000,
+  "salary_max": 260000,
+  "currency": "RUR",
+  "stats": {
+    "vacancies": 1240,
+    "remote_share": 0.38,
+    "avg_from": 170000,
+    "avg_to": 250000,
+    "top_skills": ["node.js", "sql", "docker"]
+  },
+  "status": "ready|processing|failed",
+  "created_at": "2026-02-08T12:00:00Z",
+  "updated_at": "2026-02-08T12:10:00Z"
+}
+```
 
-### Role Profiles
-- `GET /api/roles`
-- `POST /api/roles`
-- `DELETE /api/roles/:id`
+**RoleProfile**
+```json
+{
+  "id": "role_1",
+  "name": "Backend Moscow",
+  "role": "Backend Node.js",
+  "level": "middle",
+  "city": "Москва",
+  "skills": ["node.js", "sql", "docker"],
+  "schedule": "hybrid",
+  "employment": "full",
+  "salary_min": 180000,
+  "salary_max": 260000,
+  "created_by": "user_1",
+  "updated_at": "2026-02-08T10:00:00Z"
+}
+```
 
-### Competitors
-- `GET /api/competitors?role=...`
+**TeamMember**
+```json
+{"id":"user_1","name":"Константин Т.","role":"owner","email":"admin@skillradar.ai","status":"active"}
+```
 
-### Team
-- `GET /api/team`
-- `POST /api/team/invite`
-- `PATCH /api/team/:id` → роль
-- `DELETE /api/team/:id`
+### 4.3 Auth
+- `POST /api/v1/auth/login`
+  - body: `{ "email": "user@company.com" }`
+  - response: `{ "status": "sent" }`
+- `POST /api/v1/auth/verify`
+  - body: `{ "token": "magic_token" }`
+  - response: `{ "token": "jwt", "user": { ... } }`
 
-### Billing
-- `GET /api/billing/plan`
-- `POST /api/billing/checkout`
-- `POST /api/billing/webhook`
+### 4.4 Reports
+- `GET /api/v1/reports?limit=20&offset=0`
+  - response: `{ "items": [Report], "total": 124 }`
+- `POST /api/v1/reports`
+  - body:
+    ```json
+    {
+      "type": "market",
+      "role": "Backend Node.js",
+      "level": "middle",
+      "city": "Москва",
+      "skills": ["node.js", "sql"],
+      "salary_min": 180000,
+      "salary_max": 260000,
+      "schedule": "remote",
+      "employment": "full"
+    }
+    ```
+  - response: `{ "id": "rep_123", "status": "processing" }`
+- `GET /api/v1/reports/:id`
+  - response: `Report`
+- `GET /api/v1/reports/:id/export?format=pdf|csv`
+  - response: файл (стрим)
+
+### 4.5 Role Profiles
+- `GET /api/v1/roles`
+  - response: `{ "items": [RoleProfile] }`
+- `POST /api/v1/roles`
+  - body: `RoleProfile (без id)`
+  - response: `RoleProfile`
+- `DELETE /api/v1/roles/:id`
+  - response: `{ "status": "deleted" }`
+
+### 4.6 Competitors
+- `GET /api/v1/competitors?role=Backend&city=Москва`
+  - response:
+    ```json
+    {
+      "role": "Backend",
+      "city": "Москва",
+      "leaders": [{"company":"Acme","count":24}],
+      "total_vacancies": 1240,
+      "remote_share": 0.38
+    }
+    ```
+
+### 4.7 Template
+- `POST /api/v1/template`
+  - body: `{ "role": "Backend", "level": "middle", "city": "Москва" }`
+  - response:
+    ```json
+    {
+      "role": "Backend",
+      "level": "middle",
+      "city": "Москва",
+      "salary": "180–260k",
+      "requirements": ["Node.js", "SQL"],
+      "tasks": ["Поддержка API"]
+    }
+    ```
+
+### 4.8 Team
+- `GET /api/v1/team` → `{ "items": [TeamMember] }`
+- `POST /api/v1/team/invite` → `{ "email": "...", "role": "analyst" }`
+- `PATCH /api/v1/team/:id` → `{ "role": "viewer" }`
+- `DELETE /api/v1/team/:id` → `{ "status": "deleted" }`
+
+### 4.9 Billing
+- `GET /api/v1/billing/plan` → текущий план и лимиты
+- `POST /api/v1/billing/checkout` → старт оплаты
+- `POST /api/v1/billing/webhook` → платежные события
 
 ---
 
