@@ -19,6 +19,13 @@ const SRPortal = (() => {
     }
   };
 
+  const showState = state => {
+    const loading = qs('[data-sr-loading]');
+    const error = qs('[data-sr-error]');
+    if (loading) loading.classList.toggle('d-none', state !== 'loading');
+    if (error) error.classList.toggle('d-none', state !== 'error');
+  };
+
   const renderDashboard = data => {
     if (!data) return;
     const stats = qs('#sr-stats');
@@ -210,7 +217,13 @@ const SRPortal = (() => {
   const init = async () => {
     const page = document.body.dataset.page;
     if (!page || !renderers[page]) return;
+    showState('loading');
     const data = await loadJson(page);
+    if (!data) {
+      showState('error');
+      return;
+    }
+    showState('ready');
     renderers[page](data);
   };
 
