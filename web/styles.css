@@ -103,6 +103,19 @@ body {
   text-decoration: none;
 }
 
+.floating-cta {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0f14;
+  text-decoration: none;
+  font-weight: 700;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
 main {
   padding: 0 56px 80px;
 }
@@ -282,6 +295,28 @@ main {
   border: 1px solid var(--line);
 }
 
+.faq {
+  display: grid;
+  gap: 12px;
+}
+
+.faq details {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.faq summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.faq p {
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
@@ -307,5 +342,9 @@ main {
   .footer {
     padding-left: 24px;
     padding-right: 24px;
+  }
+  .floating-cta {
+    right: 16px;
+    bottom: 16px;
   }
 }
