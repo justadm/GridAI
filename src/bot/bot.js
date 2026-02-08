@@ -212,6 +212,11 @@ function startBot() {
     await ctx.reply(msg, { parse_mode: 'HTML' });
   });
 
+  bot.command('reset', async ctx => {
+    setState(ctx.from.id, STATE.IDLE);
+    await ctx.reply('Состояние сброшено. Главное меню:', mainMenu());
+  });
+
   bot.start(async ctx => {
     getOrCreateUser(ctx.from.id);
     setState(ctx.from.id, STATE.IDLE);
