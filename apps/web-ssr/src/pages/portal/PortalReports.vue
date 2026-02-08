@@ -76,6 +76,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
 import { useHead } from '../../composables/useHead';
@@ -83,6 +84,7 @@ import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
 const { isAuthed } = useAuth();
+const router = useRouter();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,
@@ -97,15 +99,18 @@ const badgeClass = (status: string) => {
   return 'text-bg-success';
 };
 
-onMounted(async () => {
+const fetchReports = async () => {
   try {
+    state.loading = true;
     state.data = await api.getReports();
   } catch {
     state.error = true;
   } finally {
     state.loading = false;
   }
-});
+};
+
+onMounted(fetchReports);
 
 const toggleForm = () => {
   showForm.value = !showForm.value;
@@ -116,6 +121,7 @@ const submit = async () => {
   if (!isAuthed.value) {
     formMessage.value = 'Нужна авторизация.';
     pushToast('Войдите, чтобы создавать отчёты.', 'info');
+    router.push('/login');
     return;
   }
   try {
@@ -123,6 +129,7 @@ const submit = async () => {
     formMessage.value = `Отчёт создан: ${res.id}`;
     showForm.value = false;
     pushToast('Отчёт создан.', 'success');
+    await fetchReports();
   } catch {
     formMessage.value = 'Не удалось создать отчёт.';
     pushToast('Не удалось создать отчёт.', 'danger');

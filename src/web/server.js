@@ -128,6 +128,7 @@ function buildApiRouter() {
     const items = listRoleProfiles(req.user.org_id);
     if (!items.length) return res.json(readMock('roles'));
     res.json({ items: items.map(item => ({
+      id: item.id,
       title: item.role,
       region: item.city || 'Москва',
       level: item.level || 'Middle',

@@ -33,6 +33,20 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json();
 }
 
+async function apiDelete<T>(path: string): Promise<T> {
+  const { token } = useAuth();
+  if (!token.value) throw new Error('UNAUTHORIZED');
+  const res = await fetch(`${apiBase}/${path}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token.value}`
+    }
+  });
+  if (!res.ok) throw new Error('API_ERROR');
+  return res.json();
+}
+
 export function useApi() {
   return {
     getDashboard: () => apiGet('dashboard'),
@@ -45,6 +59,7 @@ export function useApi() {
     getSettings: () => apiGet('settings'),
     createReport: (payload: any) => apiPost('reports', payload),
     createRole: (payload: any) => apiPost('roles', payload),
-    inviteTeam: (payload: any) => apiPost('team/invite', payload)
+    inviteTeam: (payload: any) => apiPost('team/invite', payload),
+    deleteRole: (id: string) => apiDelete(`roles/${id}`)
   };
 }

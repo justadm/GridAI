@@ -46,16 +46,41 @@
             <h3 class="h6">{{ item.title }}</h3>
             <p class="text-secondary">{{ item.region }} · {{ item.level }}</p>
             <p class="text-secondary">Навыки: {{ item.skills }}</p>
-            <button class="btn btn-outline-secondary btn-sm">Открыть</button>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm">Открыть</button>
+              <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed" @click="confirmDelete(item)">
+                Удалить
+              </button>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <div v-if="showDelete" class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Удалить профиль?</h5>
+            <button type="button" class="btn-close" @click="cancelDelete"></button>
+          </div>
+          <div class="modal-body">
+            <p>Профиль «{{ pendingDelete?.title }}» будет удалён.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" @click="cancelDelete">Отмена</button>
+            <button class="btn btn-danger" @click="performDelete">Удалить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="showDelete" class="modal-backdrop fade show"></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
 import { useHead } from '../../composables/useHead';
@@ -63,6 +88,7 @@ import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
 const { isAuthed } = useAuth();
+const router = useRouter();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,
@@ -71,16 +97,21 @@ const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
 const showForm = ref(false);
 const formMessage = ref('');
 const form = reactive({ name: '', role: '', city: '' });
+const showDelete = ref(false);
+const pendingDelete = ref<any | null>(null);
 
-onMounted(async () => {
+const fetchRoles = async () => {
   try {
+    state.loading = true;
     state.data = await api.getRoles();
   } catch {
     state.error = true;
   } finally {
     state.loading = false;
   }
-});
+};
+
+onMounted(fetchRoles);
 
 const toggleForm = () => {
   showForm.value = !showForm.value;
@@ -91,6 +122,7 @@ const submit = async () => {
   if (!isAuthed.value) {
     formMessage.value = 'Нужна авторизация.';
     pushToast('Войдите, чтобы создавать профили ролей.', 'info');
+    router.push('/login');
     return;
   }
   try {
@@ -98,9 +130,42 @@ const submit = async () => {
     formMessage.value = `Профиль создан: ${res.id}`;
     showForm.value = false;
     pushToast('Профиль роли создан.', 'success');
+    await fetchRoles();
   } catch {
     formMessage.value = 'Не удалось создать профиль.';
     pushToast('Не удалось создать профиль роли.', 'danger');
+  }
+};
+
+const confirmDelete = (item: any) => {
+  if (!isAuthed.value) {
+    pushToast('Войдите, чтобы удалять профили.', 'info');
+    router.push('/login');
+    return;
+  }
+  pendingDelete.value = item;
+  showDelete.value = true;
+};
+
+const cancelDelete = () => {
+  showDelete.value = false;
+  pendingDelete.value = null;
+};
+
+const performDelete = async () => {
+  if (!pendingDelete.value?.id) {
+    pushToast('Не удалось определить профиль для удаления.', 'danger');
+    cancelDelete();
+    return;
+  }
+  try {
+    await api.deleteRole(pendingDelete.value.id);
+    pushToast('Профиль удалён.', 'success');
+    await fetchRoles();
+  } catch {
+    pushToast('Не удалось удалить профиль.', 'danger');
+  } finally {
+    cancelDelete();
   }
 };
 
