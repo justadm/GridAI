@@ -643,7 +643,8 @@ function startBot() {
       return;
     }
 
-    if (!text || text.length < 3) {
+    const hasLetters = /[a-zа-я]/i.test(text);
+    if (!text || text.length < 3 || !hasLetters) {
       await ctx.reply('Запрос слишком короткий. Пример: «Backend, 3+ года, Node.js, от 200к».');
       return;
     }
