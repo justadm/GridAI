@@ -1,0 +1,311 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;700&display=swap");
+
+:root {
+  --bg: #0b0f14;
+  --bg-2: #0f141c;
+  --ink: #e8edf3;
+  --muted: #a7b2c3;
+  --accent: #28d7a6;
+  --accent-2: #69a9ff;
+  --card: #121826;
+  --line: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Manrope", "Space Grotesk", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(1200px 600px at 10% -10%, rgba(40, 215, 166, 0.18), transparent),
+              radial-gradient(900px 500px at 90% 0%, rgba(105, 169, 255, 0.18), transparent),
+              linear-gradient(180deg, #0a0e13 0%, #0c1118 100%);
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+  opacity: 0.5;
+}
+
+.orb {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  filter: blur(30px);
+  opacity: 0.5;
+}
+
+.orb-a {
+  left: -80px;
+  top: 120px;
+  background: radial-gradient(circle, rgba(40, 215, 166, 0.45), transparent 60%);
+}
+
+.orb-b {
+  right: -80px;
+  top: 260px;
+  background: radial-gradient(circle, rgba(105, 169, 255, 0.45), transparent 60%);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 56px;
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0f14;
+  font-weight: 800;
+}
+
+.nav a {
+  color: var(--muted);
+  text-decoration: none;
+  margin: 0 10px;
+  font-size: 14px;
+}
+
+.cta {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+main {
+  padding: 0 56px 80px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 32px;
+  align-items: center;
+  padding: 24px 0 32px;
+}
+
+.hero h1 {
+  font-family: "Space Grotesk", "Manrope", sans-serif;
+  font-size: 48px;
+  margin: 12px 0;
+  line-height: 1.1;
+}
+
+.lead {
+  font-size: 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.btn {
+  padding: 12px 18px;
+  border-radius: 12px;
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.btn.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #0b0f14;
+  border: none;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.hero-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hero-card,
+.b2b-card {
+  background: var(--card);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  padding: 18px;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(40, 215, 166, 0.15);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pill.alt {
+  background: rgba(105, 169, 255, 0.15);
+  color: var(--accent-2);
+}
+
+.prompt {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.result ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.result.muted {
+  color: var(--muted);
+}
+
+.section {
+  margin-top: 64px;
+}
+
+.section h2 {
+  font-family: "Space Grotesk", "Manrope", sans-serif;
+  font-size: 32px;
+  margin-bottom: 16px;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.feature {
+  background: var(--bg-2);
+  border-radius: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.bullets {
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.step {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+
+.step span {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.cta-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(40, 215, 166, 0.12), rgba(105, 169, 255, 0.12));
+  border: 1px solid var(--line);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 24px 56px 48px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .top {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .hero,
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .grid-3,
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  main,
+  .footer {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}

@@ -250,3 +250,12 @@ sudo systemctl status skillradar
 ```bash
 sudo tail -f /var/log/skillradar.log
 ```
+
+---
+
+## 15. Web (Landing)
+
+Локально открыть:
+```bash
+open /Users/just/Sites/sbdb.loc/web/index.html
+```

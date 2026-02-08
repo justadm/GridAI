@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SkillRadar — умный подбор вакансий и HR‑аналитика</title>
+    <meta
+      name="description"
+      content="SkillRadar — телеграм‑бот для подбора вакансий и рынка навыков. B2B‑аналитика для HR и рекрутеров."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="grid"></div>
+    </div>
+
+    <header class="top">
+      <div class="brand">
+        <span class="logo">SR</span>
+        <span class="name">SkillRadar</span>
+      </div>
+      <nav class="nav">
+        <a href="#product">Продукт</a>
+        <a href="#b2b">B2B</a>
+        <a href="#how">Как работает</a>
+      </nav>
+      <a class="cta" href="#launch">Запросить доступ</a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">TG‑бот + рынок навыков</p>
+          <h1>Находим вакансии и объясняем, почему они подходят.</h1>
+          <p class="lead">
+            SkillRadar превращает запрос в фильтры рынка и выдаёт топ‑вакансии с пояснениями.
+            Для HR — быстрые отчёты по роли, навыкам и конкурентам.
+          </p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#launch">Запустить пилот</a>
+            <a class="btn ghost" href="#product">Посмотреть возможности</a>
+          </div>
+          <div class="hero-meta">
+            <div class="chip">TG‑бот</div>
+            <div class="chip">RU рынок</div>
+            <div class="chip">HR‑аналитика</div>
+          </div>
+        </div>
+        <div class="hero-card">
+          <div class="card-header">
+            <span>Демо‑запрос</span>
+            <span class="pill">Live</span>
+          </div>
+          <div class="card-body">
+            <p class="prompt">«Backend, 3+ года, Node.js/SQL, от 200к, удалёнка»</p>
+            <div class="result">
+              <strong>Top‑3 вакансии</strong>
+              <ul>
+                <li>Backend Node.js — 200–260k, remote</li>
+                <li>API Engineer — 210–280k, hybrid</li>
+                <li>Platform Engineer — 230–300k, remote</li>
+              </ul>
+            </div>
+            <div class="result muted">
+              <strong>Почему подходит</strong>
+              <p>Совпали навыки, опыт и вилка.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="product" class="section">
+        <h2>Что делает SkillRadar</h2>
+        <div class="grid-3">
+          <div class="feature">
+            <h3>Подбор вакансий</h3>
+            <p>Из запроса формируем фильтры, ранжируем и объясняем результаты.</p>
+          </div>
+          <div class="feature">
+            <h3>Рынок навыков</h3>
+            <p>Топ‑навыки, средние вилки, доля удалёнки — одним сообщением.</p>
+          </div>
+          <div class="feature">
+            <h3>Сохранённые запросы</h3>
+            <p>Повторяйте поиск в один клик, без ручного ввода.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="b2b" class="section split">
+        <div>
+          <h2>B2B‑аналитика для HR</h2>
+          <p class="lead">
+            Быстрый Market Research по роли: объём рынка, конкуренты, требования
+            и рекомендуемая вилка.
+          </p>
+          <ul class="bullets">
+            <li>Рынок роли: спрос, навыки, вилки</li>
+            <li>Конкуренты: топ работодателей по роли</li>
+            <li>Шаблон вакансии: требования и зарплата</li>
+          </ul>
+        </div>
+        <div class="b2b-card">
+          <div class="card-header">
+            <span>Рынок роли</span>
+            <span class="pill alt">B2B</span>
+          </div>
+          <div class="card-body">
+            <p><strong>Backend Node.js (Москва)</strong></p>
+            <p>Вакансий: 1240 • Удалёнка: 38%</p>
+            <p>Вилка: 170–250k</p>
+            <p>Топ навыков: node.js, sql, docker, rest, kafka</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="how" class="section">
+        <h2>Как это работает</h2>
+        <div class="steps">
+          <div class="step">
+            <span>01</span>
+            <p>Пользователь пишет запрос в TG</p>
+          </div>
+          <div class="step">
+            <span>02</span>
+            <p>Парсер преобразует его в фильтры</p>
+          </div>
+          <div class="step">
+            <span>03</span>
+            <p>Система ранжирует и объясняет выдачу</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="launch" class="section cta-block">
+        <div>
+          <h2>Запустить пилот</h2>
+          <p>Подходит для команд HR и для соискателей. Включим нужный режим.</p>
+        </div>
+        <a class="btn primary" href="mailto:hello@skillradar.ai">Связаться</a>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>SkillRadar © 2026</span>
+      <span>Telegram‑бот и HR‑аналитика</span>
+    </footer>
+  </body>
+</html>
