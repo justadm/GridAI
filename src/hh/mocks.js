@@ -15,6 +15,21 @@ const mockVacancies = [
     }
   },
   {
+    id: 'mock-15',
+    name: 'Frontend Developer (React, Mobile)',
+    employer: { name: 'Acme Product' },
+    area: { name: 'Москва' },
+    salary: { from: 160000, to: 230000, currency: 'RUR' },
+    experience: { id: 'between1And3' },
+    schedule: { id: 'remote' },
+    employment: { id: 'full' },
+    alternate_url: 'https://example.com/vacancy/15',
+    snippet: {
+      requirement: 'React, TypeScript, React Native',
+      responsibility: 'Разработка UI'
+    }
+  },
+  {
     id: 'mock-6',
     name: 'Product Manager',
     employer: { name: 'Sigma Apps' },
@@ -42,6 +57,21 @@ const mockVacancies = [
     snippet: {
       requirement: 'Figma, UX research, прототипирование',
       responsibility: 'Проектирование интерфейсов и тесты'
+    }
+  },
+  {
+    id: 'mock-16',
+    name: 'UI/UX Designer (Mobile)',
+    employer: { name: 'Pixel Works' },
+    area: { name: 'Екатеринбург' },
+    salary: { from: 140000, to: 200000, currency: 'RUR' },
+    experience: { id: 'between1And3' },
+    schedule: { id: 'remote' },
+    employment: { id: 'part' },
+    alternate_url: 'https://example.com/vacancy/16',
+    snippet: {
+      requirement: 'Figma, UX, mobile',
+      responsibility: 'Проектирование мобильных интерфейсов'
     }
   },
   {
@@ -135,6 +165,21 @@ const mockVacancies = [
     }
   },
   {
+    id: 'mock-13',
+    name: 'Backend Node.js Developer (API)',
+    employer: { name: 'Beta Tech' },
+    area: { name: 'Санкт-Петербург' },
+    salary: { from: 190000, to: 270000, currency: 'RUR' },
+    experience: { id: 'between3And6' },
+    schedule: { id: 'fullDay' },
+    employment: { id: 'full' },
+    alternate_url: 'https://example.com/vacancy/13',
+    snippet: {
+      requirement: 'Node.js, REST, PostgreSQL',
+      responsibility: 'Разработка backend сервиса'
+    }
+  },
+  {
     id: 'mock-3',
     name: 'QA Engineer (Manual/Auto)',
     employer: { name: 'Gamma QA' },
@@ -162,6 +207,21 @@ const mockVacancies = [
     snippet: {
       requirement: 'SQL, Excel, Power BI, Python',
       responsibility: 'Отчеты, дашборды, анализ'
+    }
+  },
+  {
+    id: 'mock-14',
+    name: 'Data Analyst (BI)',
+    employer: { name: 'Delta Analytics' },
+    area: { name: 'Москва' },
+    salary: { from: 130000, to: 190000, currency: 'RUR' },
+    experience: { id: 'between1And3' },
+    schedule: { id: 'fullDay' },
+    employment: { id: 'full' },
+    alternate_url: 'https://example.com/vacancy/14',
+    snippet: {
+      requirement: 'SQL, Power BI, DWH',
+      responsibility: 'Отчеты и витрины данных'
     }
   },
   {
