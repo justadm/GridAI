@@ -14,6 +14,7 @@ const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 10);
 const ADMIN_TG_IDS = String(process.env.ADMIN_TG_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 
 const rateBuckets = new Map();
+const searchCache = new Map();
 
 const STATE = {
   IDLE: 'idle',
@@ -67,12 +68,73 @@ function stoplistMenu() {
   ]).resize();
 }
 
+function paginationMenu() {
+  return Markup.keyboard([
+    ['Показать еще'],
+    ['Главное меню']
+  ]).resize();
+}
+
 function formatSalary(salary) {
   if (!salary) return 'не указана';
   const from = salary.from ? `от ${salary.from}` : '';
   const to = salary.to ? `до ${salary.to}` : '';
   const sep = from && to ? ' ' : '';
   return `${from}${sep}${to} ${salary.currency || ''}`.trim();
+}
+
+function extractUserFilters(text) {
+  const t = String(text || '').toLowerCase();
+  const locationMap = [
+    ['москва', 'Москва'],
+    ['moscow', 'Москва'],
+    ['санкт-петербург', 'Санкт-Петербург'],
+    ['питер', 'Санкт-Петербург'],
+    ['спб', 'Санкт-Петербург'],
+    ['ekaterinburg', 'Екатеринбург'],
+    ['екатеринбург', 'Екатеринбург'],
+    ['новосибирск', 'Новосибирск'],
+    ['казань', 'Казань']
+  ];
+
+  let location = '';
+  for (const [key, name] of locationMap) {
+    if (t.includes(key)) {
+      location = name;
+      break;
+    }
+  }
+
+  const remote = /удаленк|remote|удаленно/.test(t);
+  const office = /офис/.test(t);
+  const fullDay = /полный день/.test(t);
+
+  return { location, remote, office, fullDay };
+}
+
+function applyUserFilters(items, filters) {
+  let res = items;
+  if (filters.location) {
+    const loc = filters.location.toLowerCase();
+    res = res.filter(v => String(v.area?.name || '').toLowerCase().includes(loc));
+  }
+  if (filters.remote) {
+    res = res.filter(v => {
+      const schedule = String(v.schedule?.id || '').toLowerCase();
+      const area = String(v.area?.name || '').toLowerCase();
+      return schedule.includes('remote') || area.includes('удал');
+    });
+  }
+  if (filters.office) {
+    res = res.filter(v => {
+      const schedule = String(v.schedule?.id || '').toLowerCase();
+      return !schedule.includes('remote');
+    });
+  }
+  if (filters.fullDay) {
+    res = res.filter(v => String(v.schedule?.id || '').toLowerCase().includes('fullday'));
+  }
+  return res;
 }
 
 function uniqTopSkills(list, limit) {
@@ -106,6 +168,7 @@ async function handleSearch(ctx, text) {
   console.log(`[search] tg_id=${tgId} text="${text}"`);
   await ctx.reply('Ищу подходящие вакансии…', { reply_markup: { remove_keyboard: true } });
 
+  const userFilters = extractUserFilters(text);
   const criteria = await parseCriteria(text);
   saveQuery(user.id, 'search', text, criteria);
 
@@ -119,7 +182,7 @@ async function handleSearch(ctx, text) {
 
   const stoplist = listStopWords(user.id);
   const desiredSalary = criteria.salary?.amount || 0;
-  const filtered = items.filter(v => {
+  let filtered = items.filter(v => {
     if (isStopMatch(v, stoplist)) return false;
     if (desiredSalary > 0 && v.salary) {
       const max = Math.max(v.salary.from || 0, v.salary.to || 0);
@@ -128,19 +191,36 @@ async function handleSearch(ctx, text) {
     return true;
   });
 
+  filtered = applyUserFilters(filtered, userFilters);
+
   const ranked = rankVacancies(filtered, criteria, stoplist);
-  const top = ranked.slice(0, 10).map(r => r.vacancy);
-
-  const explanations = await explainFits(top, criteria);
-
-  if (!top.length) {
+  const all = ranked.map(r => r.vacancy);
+  if (!all.length) {
     await ctx.reply('Ничего не нашлось по этим критериям. Попробуй упростить запрос.');
     return;
   }
 
-  const lines = top.map((v, i) => {
+  searchCache.set(String(tgId), { items: all, index: 0, criteria });
+  await sendNextBatch(ctx);
+}
+
+async function sendNextBatch(ctx) {
+  const tgId = ctx.from.id;
+  const entry = searchCache.get(String(tgId));
+  if (!entry) {
+    await ctx.reply('Нет активного поиска. Нажми «Подбор вакансий».', mainMenu());
+    return;
+  }
+  const batchSize = 5;
+  const slice = entry.items.slice(entry.index, entry.index + batchSize);
+  entry.index += slice.length;
+
+  const explanations = await explainFits(slice, entry.criteria);
+  const baseIndex = entry.index - slice.length;
+
+  const lines = slice.map((v, i) => {
     const expl = explanations?.[v.id] ? `\nПочему: ${escapeHtml(explanations[v.id])}` : '';
-    return `<b>${i + 1}. ${escapeHtml(v.name)}</b>\n` +
+    return `<b>${baseIndex + i + 1}. ${escapeHtml(v.name)}</b>\n` +
       `Компания: ${escapeHtml(v.employer?.name || '—')}\n` +
       `Зарплата: ${escapeHtml(formatSalary(v.salary))}\n` +
       `Город: ${escapeHtml(v.area?.name || '—')}\n` +
@@ -148,7 +228,13 @@ async function handleSearch(ctx, text) {
   });
 
   await ctx.reply(lines.join('\n\n'), { parse_mode: 'HTML', disable_web_page_preview: true });
-  await ctx.reply('Главное меню', mainMenu());
+
+  if (entry.index < entry.items.length) {
+    await ctx.reply('Еще результаты?', paginationMenu());
+  } else {
+    searchCache.delete(String(tgId));
+    await ctx.reply('Главное меню', mainMenu());
+  }
 }
 
 async function handleMarket(ctx, text) {
@@ -244,6 +330,7 @@ function startBot() {
 
   bot.command('reset', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
+    searchCache.delete(String(ctx.from.id));
     await ctx.reply('Состояние сброшено. Главное меню:', mainMenu());
   });
 
@@ -257,6 +344,7 @@ function startBot() {
       '• Опыт (junior/middle/senior или годы)',
       '• Навыки (React, Node.js, SQL)',
       '• Зарплата (от/до, в рублях)',
+      '• Локация/формат (Москва/СПб, удаленка/офис)',
       '',
       'Команды: /start, /help, /status, /reset'
     ].join('\n');
@@ -322,7 +410,12 @@ function startBot() {
 
   bot.hears('Главное меню', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
+    searchCache.delete(String(ctx.from.id));
     await ctx.reply('Главное меню', mainMenu());
+  });
+
+  bot.hears('Показать еще', async ctx => {
+    await sendNextBatch(ctx);
   });
 
   bot.on('text', async ctx => {
