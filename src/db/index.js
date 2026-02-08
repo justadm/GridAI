@@ -313,6 +313,12 @@ function getReport(orgId, id) {
   return { ...row, stats: row.stats_json ? JSON.parse(row.stats_json) : null };
 }
 
+function deleteReport(orgId, id) {
+  const db = getDb();
+  db.prepare('DELETE FROM reports WHERE id = ? AND org_id = ?').run(id, orgId);
+  return true;
+}
+
 function listRoleProfiles(orgId) {
   const db = getDb();
   return db.prepare('SELECT * FROM role_profiles WHERE org_id = ? ORDER BY updated_at DESC').all(orgId)
@@ -404,6 +410,7 @@ module.exports = {
   listReports,
   createReport,
   getReport,
+  deleteReport,
   listRoleProfiles,
   createRoleProfile,
   deleteRoleProfile,

@@ -58,6 +58,7 @@ export function useApi() {
     getBilling: () => apiGet('billing'),
     getSettings: () => apiGet('settings'),
     createReport: (payload: any) => apiPost('reports', payload),
+    deleteReport: (id: string) => apiDelete(`reports/${id}`),
     createRole: (payload: any) => apiPost('roles', payload),
     inviteTeam: (payload: any) => apiPost('team/invite', payload),
     deleteRole: (id: string) => apiDelete(`roles/${id}`)

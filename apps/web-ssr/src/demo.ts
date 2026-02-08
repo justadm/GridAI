@@ -19,9 +19,9 @@ export const demoData = {
   },
   reports: {
     items: [
-      { role: 'Backend Node.js', region: 'Москва', type: 'Рынок роли', date: '2026-02-08', status: 'Готов' },
-      { role: 'Product Manager', region: 'Казань', type: 'Конкуренты', date: '2026-02-07', status: 'В работе' },
-      { role: 'QA Automation', region: 'СПб', type: 'Шаблон вакансии', date: '2026-02-06', status: 'Готов' }
+      { id: 'rep_demo_1', role: 'Backend Node.js', region: 'Москва', type: 'Рынок роли', date: '2026-02-08', status: 'Готов' },
+      { id: 'rep_demo_2', role: 'Product Manager', region: 'Казань', type: 'Конкуренты', date: '2026-02-07', status: 'В работе' },
+      { id: 'rep_demo_3', role: 'QA Automation', region: 'СПб', type: 'Шаблон вакансии', date: '2026-02-06', status: 'Готов' }
     ]
   },
   roles: {

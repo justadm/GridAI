@@ -56,21 +56,46 @@
                 <th>Тип отчёта</th>
                 <th>Дата</th>
                 <th>Статус</th>
+                <th class="text-end">Действия</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in state.data.items" :key="item.role + item.date">
+              <tr v-for="item in state.data.items" :key="item.id || (item.role + item.date)">
                 <td>{{ item.role }}</td>
                 <td>{{ item.region }}</td>
                 <td>{{ item.type }}</td>
                 <td>{{ item.date }}</td>
                 <td><span class="badge" :class="badgeClass(item.status)">{{ item.status }}</span></td>
+                <td class="text-end">
+                  <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed" @click="confirmDelete(item)">
+                    Удалить
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
+
+    <div v-if="showDelete" class="modal fade show" style="display: block;" tabindex="-1" role="dialog">
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Удалить отчёт?</h5>
+            <button type="button" class="btn-close" @click="cancelDelete"></button>
+          </div>
+          <div class="modal-body">
+            <p>Отчёт «{{ pendingDelete?.role }}» будет удалён.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary" @click="cancelDelete">Отмена</button>
+            <button class="btn btn-danger" @click="performDelete">Удалить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="showDelete" class="modal-backdrop fade show"></div>
   </div>
 </template>
 
@@ -93,6 +118,8 @@ const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
 const showForm = ref(false);
 const formMessage = ref('');
 const form = reactive({ role: '', city: '', type: 'market' });
+const showDelete = ref(false);
+const pendingDelete = ref<any | null>(null);
 
 const badgeClass = (status: string) => {
   if (status?.toLowerCase().includes('работ')) return 'text-bg-warning';
@@ -133,6 +160,38 @@ const submit = async () => {
   } catch {
     formMessage.value = 'Не удалось создать отчёт.';
     pushToast('Не удалось создать отчёт.', 'danger');
+  }
+};
+
+const confirmDelete = (item: any) => {
+  if (!isAuthed.value) {
+    pushToast('Войдите, чтобы удалять отчёты.', 'info');
+    router.push('/login');
+    return;
+  }
+  pendingDelete.value = item;
+  showDelete.value = true;
+};
+
+const cancelDelete = () => {
+  showDelete.value = false;
+  pendingDelete.value = null;
+};
+
+const performDelete = async () => {
+  if (!pendingDelete.value?.id) {
+    pushToast('Не удалось определить отчёт для удаления.', 'danger');
+    cancelDelete();
+    return;
+  }
+  try {
+    await api.deleteReport(pendingDelete.value.id);
+    pushToast('Отчёт удалён.', 'success');
+    await fetchReports();
+  } catch {
+    pushToast('Не удалось удалить отчёт.', 'danger');
+  } finally {
+    cancelDelete();
   }
 };
 

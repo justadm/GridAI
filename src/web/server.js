@@ -13,6 +13,7 @@ const {
   listRoleProfiles,
   createRoleProfile,
   deleteRoleProfile,
+  deleteReport,
   listTeam,
   inviteTeamMember,
   updateTeamRole,
@@ -94,6 +95,7 @@ function buildApiRouter() {
     }
     res.json({
       items: items.map(item => ({
+        id: item.id,
         role: item.role,
         region: item.city || 'Москва',
         type: item.type === 'competitors' ? 'Конкуренты' : item.type === 'template' ? 'Шаблон вакансии' : 'Рынок роли',
@@ -146,6 +148,15 @@ function buildApiRouter() {
 
   app.delete(`${API_BASE}/roles/:id`, requireAuth, (req, res) => {
     deleteRoleProfile(req.user.org_id, req.params.id);
+    res.json({ status: 'deleted' });
+  });
+
+  app.delete(`${API_BASE}/reports/:id`, requireAuth, (req, res) => {
+    const report = getReport(req.user.org_id, req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Report not found' } });
+    }
+    deleteReport(req.user.org_id, req.params.id);
     res.json({ status: 'deleted' });
   });
 

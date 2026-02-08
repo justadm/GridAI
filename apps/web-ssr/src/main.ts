@@ -9,6 +9,17 @@ export function createApp() {
     routes
   });
 
+  if (isClient) {
+    router.beforeEach((to) => {
+      if (!to.path.startsWith('/portal')) return true;
+      const token = localStorage.getItem('sr-token');
+      if (token) return true;
+      sessionStorage.setItem('sr-redirect', to.fullPath);
+      if (to.path === '/login') return true;
+      return '/login';
+    });
+  }
+
   const head = ref('');
 
   const app = createSSRApp({

@@ -81,6 +81,10 @@ const verify = async () => {
   localStorage.setItem('sr-api-base', '/api/v1');
   setProfile({ email: data.user?.email, role: data.user?.role });
   verifyMessage.value = 'Готово! Переходим в портал…';
-  setTimeout(() => router.push('/portal'), 800);
+  const redirect = typeof window !== 'undefined' ? sessionStorage.getItem('sr-redirect') : null;
+  if (redirect) {
+    sessionStorage.removeItem('sr-redirect');
+  }
+  setTimeout(() => router.push(redirect || '/portal'), 800);
 };
 </script>
