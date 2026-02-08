@@ -7,6 +7,7 @@ const apiKey = process.env.OPENAI_API_KEY;
 const modelMain = process.env.OPENAI_MODEL_MAIN || 'gpt-4.1-mini';
 const modelMarket = process.env.OPENAI_MODEL_MARKET || 'gpt-4.1-nano';
 const LLM_CACHE_TTL_MS = Number(process.env.LLM_CACHE_TTL_MS || 24 * 60 * 60 * 1000);
+const USE_MOCKS = String(process.env.USE_MOCKS || '').toLowerCase() === 'true';
 
 const client = new OpenAI({ apiKey });
 
@@ -61,6 +62,16 @@ function setCacheJson(cacheKey, value) {
 }
 
 async function parseCriteria(rawText) {
+  if (USE_MOCKS) {
+    return {
+      role: 'Software Engineer',
+      skills: ['JavaScript', 'Node.js'],
+      salary: { amount: 150000, currency: 'RUR' },
+      experience: 'middle',
+      keywords: [],
+      exclude: []
+    };
+  }
   const cacheKey = `criteria:${hashText(rawText)}`;
   const cached = getCacheJson(cacheKey);
   if (cached) {
@@ -93,6 +104,13 @@ async function parseCriteria(rawText) {
 
 async function explainFits(vacancies, criteria) {
   if (!vacancies.length) return {};
+  if (USE_MOCKS) {
+    const res = {};
+    for (const v of vacancies) {
+      res[v.id] = 'Совпадают навыки и уровень, зарплата близка к ожиданиям.';
+    }
+    return res;
+  }
   const criteriaKey = hashText(JSON.stringify(criteria || {}));
   const result = {};
 
@@ -146,6 +164,9 @@ async function explainFits(vacancies, criteria) {
 }
 
 async function marketComment(stats, query) {
+  if (USE_MOCKS) {
+    return 'Рынок выглядит стабильным: спрос есть, по зарплатам — средний уровень.';
+  }
   const system = 'Сделай короткий аналитический комментарий (1-2 предложения). Без воды.';
   const user = `Запрос: ${query}\nСтатистика: ${JSON.stringify(stats)}`;
 

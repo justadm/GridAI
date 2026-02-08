@@ -1,6 +1,10 @@
 const { request } = require('undici');
+const { getVacancyCache, saveVacancyCache } = require('../db');
+const { mockSearchVacancies, mockGetVacancy } = require('./mocks');
 
 const HH_API_BASE = process.env.HH_API_BASE || 'https://api.hh.ru';
+const HH_CACHE_TTL_MS = Number(process.env.HH_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+const USE_MOCKS = String(process.env.USE_MOCKS || '').toLowerCase() === 'true';
 
 function buildUrl(path, params = {}) {
   const url = new URL(path, HH_API_BASE);
@@ -27,13 +31,22 @@ async function getJson(url) {
 }
 
 async function searchVacancies(params, page = 0, perPage = 50) {
+  if (USE_MOCKS) return mockSearchVacancies();
   const url = buildUrl('/vacancies', { ...params, page, per_page: perPage });
   return getJson(url);
 }
 
 async function getVacancy(vacancyId) {
+  if (USE_MOCKS) return mockGetVacancy(vacancyId);
+  const cached = getVacancyCache(String(vacancyId));
+  if (cached) {
+    const age = Date.now() - new Date(cached.fetched_at).getTime();
+    if (age < HH_CACHE_TTL_MS) return JSON.parse(cached.raw_json);
+  }
   const url = buildUrl(`/vacancies/${vacancyId}`);
-  return getJson(url);
+  const data = await getJson(url);
+  saveVacancyCache(String(vacancyId), data);
+  return data;
 }
 
 module.exports = {
