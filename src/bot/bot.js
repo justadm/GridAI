@@ -63,7 +63,7 @@ function mainMenu() {
 function stoplistMenu() {
   return Markup.keyboard([
     ['Добавить стоп-слово', 'Удалить стоп-слово'],
-    ['Назад']
+    ['Главное меню']
   ]).resize();
 }
 
@@ -311,6 +311,11 @@ function startBot() {
   });
 
   bot.hears('Назад', async ctx => {
+    setState(ctx.from.id, STATE.IDLE);
+    await ctx.reply('Главное меню', mainMenu());
+  });
+
+  bot.hears('Главное меню', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
     await ctx.reply('Главное меню', mainMenu());
   });
