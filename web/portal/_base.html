@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SkillRadar — Профили ролей</title>
+    <title>{{TITLE}}</title>
     <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
     <script>
       (() => {
@@ -53,7 +53,7 @@
             <ul class="nav flex-column">
               <li class="nav-item"><a class="nav-link" href="dashboard.html">Дашборд</a></li>
               <li class="nav-item"><a class="nav-link" href="reports.html">Отчёты</a></li>
-              <li class="nav-item"><a class="nav-link active" href="roles.html">Профили ролей</a></li>
+              <li class="nav-item"><a class="nav-link" href="roles.html">Профили ролей</a></li>
               <li class="nav-item"><a class="nav-link" href="competitors.html">Конкуренты</a></li>
               <li class="nav-item"><a class="nav-link" href="template.html">Шаблон вакансии</a></li>
               <li class="nav-item"><a class="nav-link" href="team.html">Команда</a></li>
@@ -62,48 +62,8 @@
             </ul>
           </div>
         </nav>
-
         <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
-          <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-3 mb-4">
-            <div>
-              <h1 class="h3 mb-1">Профили ролей</h1>
-              <p class="sr-muted mb-0">Портреты ролей, навыки, вилки и рекомендации.</p>
-            </div>
-            <button class="btn btn-outline-secondary btn-sm">Создать профиль</button>
-          </div>
-
-          <div class="row g-3">
-            <div class="col-md-6 col-lg-4">
-              <div class="card sr-card h-100">
-                <div class="card-body">
-                  <h3 class="h6">Backend Node.js</h3>
-                  <p class="sr-muted">Москва · Middle+</p>
-                  <p class="sr-muted">Навыки: node.js, sql, docker, rest</p>
-                  <button class="btn btn-outline-secondary btn-sm">Открыть</button>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card sr-card h-100">
-                <div class="card-body">
-                  <h3 class="h6">QA Automation</h3>
-                  <p class="sr-muted">СПб · Middle</p>
-                  <p class="sr-muted">Навыки: python, selenium, api, ci</p>
-                  <button class="btn btn-outline-secondary btn-sm">Открыть</button>
-                </div>
-              </div>
-            </div>
-            <div class="col-md-6 col-lg-4">
-              <div class="card sr-card h-100">
-                <div class="card-body">
-                  <h3 class="h6">Product Manager</h3>
-                  <p class="sr-muted">Казань · Senior</p>
-                  <p class="sr-muted">Навыки: discovery, analytics, roadmap</p>
-                  <button class="btn btn-outline-secondary btn-sm">Открыть</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          {{CONTENT}}
         </main>
       </div>
     </div>
