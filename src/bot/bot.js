@@ -4,10 +4,11 @@ const { searchVacancies } = require('../hh/client');
 const { criteriaToSearchParams } = require('../hh/mappers');
 const { rankVacancies } = require('../score/scoring');
 const { computeMarketStats } = require('../market/market');
-const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery } = require('../db');
+const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery, getMarketCache, saveMarketCache } = require('../db');
 const { escapeHtml, includesAny } = require('../utils/text');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const STARTED_AT = Date.now();
 
 const STATE = {
   IDLE: 'idle',
@@ -64,6 +65,7 @@ async function handleSearch(ctx, text) {
   const tgId = ctx.from.id;
   const user = getOrCreateUser(tgId);
 
+  console.log(`[search] tg_id=${tgId} text="${text}"`);
   await ctx.reply('Ищу подходящие вакансии…');
 
   const criteria = await parseCriteria(text);
@@ -106,7 +108,29 @@ async function handleMarket(ctx, text) {
   const tgId = ctx.from.id;
   const user = getOrCreateUser(tgId);
 
+  console.log(`[market] tg_id=${tgId} text="${text}"`);
   await ctx.reply('Собираю срез рынка…');
+
+  const cacheKey = `market:${(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
+  const cached = getMarketCache(cacheKey);
+  if (cached) {
+    const cachedStats = JSON.parse(cached.stats_json);
+    const comment = await marketComment(cachedStats, text);
+    const topSkills = cachedStats.top_skills?.slice(0, 5).map(s => `${s.skill} (${s.count})`).join(', ');
+    const msg = [
+      `<b>Рынок: ${escapeHtml(text)}</b>`,
+      `Всего вакансий (оценка): ${cachedStats.total_found}`,
+      `В выборке: ${cachedStats.sample_size}`,
+      `Удаленка: ~${cachedStats.remote_share}%`,
+      cachedStats.salary_from_avg ? `Средняя \"от\": ${cachedStats.salary_from_avg} RUR` : 'Средняя \"от\": —',
+      cachedStats.salary_to_avg ? `Средняя \"до\": ${cachedStats.salary_to_avg} RUR` : 'Средняя \"до\": —',
+      topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —',
+      comment ? `Комментарий: ${escapeHtml(comment)}` : ''
+    ].filter(Boolean).join('\n');
+
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+    return;
+  }
 
   const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
   const first = await searchVacancies(params, 0, 50);
@@ -117,6 +141,7 @@ async function handleMarket(ctx, text) {
   }
 
   const stats = computeMarketStats(items, first.found || items.length);
+  saveMarketCache(cacheKey, stats);
   saveQuery(user.id, 'market', text, stats);
 
   const comment = await marketComment(stats, text);
@@ -149,6 +174,23 @@ function startBot() {
   }
 
   const bot = new Telegraf(BOT_TOKEN);
+
+  bot.command('status', async ctx => {
+    const uptimeSec = Math.floor((Date.now() - STARTED_AT) / 1000);
+    const hours = Math.floor(uptimeSec / 3600);
+    const minutes = Math.floor((uptimeSec % 3600) / 60);
+    const seconds = uptimeSec % 60;
+    const uptime = `${hours}h ${minutes}m ${seconds}s`;
+    const msg = [
+      '<b>SkillRadar статус</b>',
+      `Uptime: ${uptime}`,
+      `HH area: ${process.env.HH_AREA_DEFAULT || '113'}`,
+      `HH cache TTL: ${process.env.HH_CACHE_TTL_MS || '21600000'}`,
+      `LLM cache TTL: ${process.env.LLM_CACHE_TTL_MS || '86400000'}`,
+      `DB: ${process.env.DB_PATH || 'data/db.sqlite'}`
+    ].join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  });
 
   bot.start(async ctx => {
     getOrCreateUser(ctx.from.id);
@@ -218,9 +260,14 @@ function startBot() {
         return;
       }
     } catch (err) {
+      console.error('[bot:error]', err);
       await ctx.reply(`Ошибка: ${err.message || 'что-то пошло не так'}`);
       await ctx.reply('Главное меню', mainMenu());
     }
+  });
+
+  bot.catch(err => {
+    console.error('[bot:unhandled]', err);
   });
 
   bot.launch();
