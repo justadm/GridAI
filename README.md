@@ -264,3 +264,8 @@ open /Users/just/Sites/sbdb.loc/web/index.html
 ```bash
 open /Users/just/Sites/sbdb.loc/web/admin.html
 ```
+
+ЛК (портал):
+```bash
+open /Users/just/Sites/sbdb.loc/web/portal/dashboard.html
+```
