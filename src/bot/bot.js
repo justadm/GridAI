@@ -334,6 +334,23 @@ async function handleMarket(ctx, text) {
 
 async function handleB2BMarket(ctx, text) {
   await ctx.reply('Собираю аналитику рынка…', { reply_markup: { remove_keyboard: true } });
+  const cacheKey = `b2b:market:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
+  const cached = getMarketCache(cacheKey);
+  if (cached) {
+    const stats = JSON.parse(cached.stats_json);
+    const topSkills = uniqTopSkills(stats.top_skills || [], 7);
+    const msg = [
+      `<b>Рынок: ${escapeHtml(text)}</b>`,
+      `Вакансий (оценка): ${stats.total_found}`,
+      `Удаленка: ~${stats.remote_share}%`,
+      stats.salary_from_avg ? `Средняя "от": ${stats.salary_from_avg} RUR` : 'Средняя "от": —',
+      stats.salary_to_avg ? `Средняя "до": ${stats.salary_to_avg} RUR` : 'Средняя "до": —',
+      topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
+    ].filter(Boolean).join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
   const first = await searchVacancies(params, 0, 50);
   let items = first.items || [];
@@ -342,6 +359,7 @@ async function handleB2BMarket(ctx, text) {
     items = items.concat(second.items || []);
   }
   const stats = computeMarketStats(items, first.found || items.length);
+  saveMarketCache(cacheKey, stats);
   const topSkills = uniqTopSkills(stats.top_skills || [], 7);
   const msg = [
     `<b>Рынок: ${escapeHtml(text)}</b>`,
@@ -357,6 +375,19 @@ async function handleB2BMarket(ctx, text) {
 
 async function handleB2BCompetitors(ctx, text) {
   await ctx.reply('Собираю список конкурентов…', { reply_markup: { remove_keyboard: true } });
+  const cacheKey = `b2b:comp:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
+  const cached = getMarketCache(cacheKey);
+  if (cached) {
+    const data = JSON.parse(cached.stats_json);
+    const lines = (data.lines || []).join('\n');
+    const msg = [
+      `<b>Конкуренты: ${escapeHtml(text)}</b>`,
+      lines.length ? lines : 'Нет данных'
+    ].join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
   const first = await searchVacancies(params, 0, 50);
   let items = first.items || [];
@@ -369,8 +400,12 @@ async function handleB2BCompetitors(ctx, text) {
     const name = v.employer?.name || '—';
     counts.set(name, (counts.get(name) || 0) + 1);
   }
-  const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const top = Array.from(counts.entries())
+    .filter(([, count]) => count > 1)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
   const lines = top.map((t, i) => `${i + 1}. ${t[0]} — ${t[1]}`);
+  saveMarketCache(cacheKey, { lines });
   const msg = [
     `<b>Конкуренты: ${escapeHtml(text)}</b>`,
     lines.length ? lines.join('\n') : 'Нет данных'
@@ -381,6 +416,22 @@ async function handleB2BCompetitors(ctx, text) {
 
 async function handleB2BTemplate(ctx, text) {
   await ctx.reply('Формирую шаблон вакансии…', { reply_markup: { remove_keyboard: true } });
+  const cacheKey = `b2b:template:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
+  const cached = getMarketCache(cacheKey);
+  if (cached) {
+    const stats = JSON.parse(cached.stats_json);
+    const topSkills = uniqTopSkills(stats.top_skills || [], 6);
+    const msg = [
+      `<b>Шаблон вакансии: ${escapeHtml(text)}</b>`,
+      stats.salary_from_avg && stats.salary_to_avg
+        ? `Рекомендуемая вилка: ${stats.salary_from_avg}–${stats.salary_to_avg} RUR`
+        : 'Рекомендуемая вилка: —',
+      topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
+    ].join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
   const first = await searchVacancies(params, 0, 50);
   let items = first.items || [];
@@ -389,6 +440,7 @@ async function handleB2BTemplate(ctx, text) {
     items = items.concat(second.items || []);
   }
   const stats = computeMarketStats(items, first.found || items.length);
+  saveMarketCache(cacheKey, stats);
   const topSkills = uniqTopSkills(stats.top_skills || [], 6);
   const msg = [
     `<b>Шаблон вакансии: ${escapeHtml(text)}</b>`,
@@ -588,6 +640,11 @@ function startBot() {
     const state = getState(ctx.from.id);
     if (!rateLimitOk(ctx.from.id)) {
       await ctx.reply('Слишком много запросов. Подожди минуту и попробуй снова.');
+      return;
+    }
+
+    if (!text || text.length < 3) {
+      await ctx.reply('Запрос слишком короткий. Пример: «Backend, 3+ года, Node.js, от 200к».');
       return;
     }
 
