@@ -9,6 +9,10 @@ const { escapeHtml, includesAny } = require('../utils/text');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STARTED_AT = Date.now();
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 10);
+
+const rateBuckets = new Map();
 
 const STATE = {
   IDLE: 'idle',
@@ -26,6 +30,22 @@ function setState(tgId, state) {
 
 function getState(tgId) {
   return userState.get(String(tgId)) || STATE.IDLE;
+}
+
+function rateLimitOk(tgId) {
+  const key = String(tgId);
+  const now = Date.now();
+  let bucket = rateBuckets.get(key);
+  if (!bucket) {
+    bucket = { start: now, count: 0 };
+    rateBuckets.set(key, bucket);
+  }
+  if (now - bucket.start > RATE_LIMIT_WINDOW_MS) {
+    bucket.start = now;
+    bucket.count = 0;
+  }
+  bucket.count += 1;
+  return bucket.count <= RATE_LIMIT_MAX;
 }
 
 function mainMenu() {
@@ -233,6 +253,10 @@ function startBot() {
     if (!text) return;
 
     const state = getState(ctx.from.id);
+    if (!rateLimitOk(ctx.from.id)) {
+      await ctx.reply('Слишком много запросов. Подожди минуту и попробуй снова.');
+      return;
+    }
 
     try {
       if (state === STATE.AWAIT_SEARCH) {
