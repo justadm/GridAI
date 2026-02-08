@@ -75,6 +75,19 @@ function formatSalary(salary) {
   return `${from}${sep}${to} ${salary.currency || ''}`.trim();
 }
 
+function uniqTopSkills(list, limit) {
+  const res = [];
+  const seen = new Set();
+  for (const item of list) {
+    const key = String(item.skill || '').toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    res.push(`${item.skill} (${item.count})`);
+    if (res.length >= limit) break;
+  }
+  return res.join(', ');
+}
+
 function isStopMatch(vacancy, stoplist) {
   if (!stoplist.length) return false;
   const text = [
@@ -105,7 +118,15 @@ async function handleSearch(ctx, text) {
   }
 
   const stoplist = listStopWords(user.id);
-  const filtered = items.filter(v => !isStopMatch(v, stoplist));
+  const desiredSalary = criteria.salary?.amount || 0;
+  const filtered = items.filter(v => {
+    if (isStopMatch(v, stoplist)) return false;
+    if (desiredSalary > 0 && v.salary) {
+      const max = Math.max(v.salary.from || 0, v.salary.to || 0);
+      if (max > 0 && max < desiredSalary) return false;
+    }
+    return true;
+  });
 
   const ranked = rankVacancies(filtered, criteria, stoplist);
   const top = ranked.slice(0, 10).map(r => r.vacancy);
@@ -142,7 +163,7 @@ async function handleMarket(ctx, text) {
   if (cached) {
     const cachedStats = JSON.parse(cached.stats_json);
     const comment = await marketComment(cachedStats, text);
-    const topSkills = cachedStats.top_skills?.slice(0, 5).map(s => `${s.skill} (${s.count})`).join(', ');
+    const topSkills = uniqTopSkills(cachedStats.top_skills || [], 5);
     const msg = [
       `<b>Рынок: ${escapeHtml(text)}</b>`,
       `Всего вакансий (оценка): ${cachedStats.total_found}`,
@@ -172,7 +193,7 @@ async function handleMarket(ctx, text) {
   saveQuery(user.id, 'market', text, stats);
 
   const comment = await marketComment(stats, text);
-  const topSkills = stats.top_skills.slice(0, 5).map(s => `${s.skill} (${s.count})`).join(', ');
+  const topSkills = uniqTopSkills(stats.top_skills || [], 5);
 
   const msg = [
     `<b>Рынок: ${escapeHtml(text)}</b>`,
