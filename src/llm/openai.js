@@ -63,10 +63,13 @@ function setCacheJson(cacheKey, value) {
 
 async function parseCriteria(rawText) {
   if (USE_MOCKS) {
+    const text = String(rawText || '');
+    const num = text.match(/(\d{2,6})/);
+    const amount = num ? Number(num[1]) : 0;
     return {
       role: 'Software Engineer',
       skills: ['JavaScript', 'Node.js'],
-      salary: { amount: 150000, currency: 'RUR' },
+      salary: { amount, currency: 'RUR' },
       experience: 'middle',
       keywords: [],
       exclude: []
