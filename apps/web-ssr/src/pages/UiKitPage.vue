@@ -82,3 +82,12 @@
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { useHead } from '../composables/useHead';
+
+useHead(`
+  <title>SkillRadar — UI‑kit</title>
+  <meta name="robots" content="noindex,nofollow" />
+`);
+</script>

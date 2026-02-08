@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { onMounted, reactive } from 'vue';
 import { useApi } from '../../composables/useApi';
+import { useHead } from '../../composables/useHead';
 
 const api = useApi();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
@@ -115,4 +116,9 @@ onMounted(async () => {
     state.loading = false;
   }
 });
+
+useHead(`
+  <title>SkillRadar — Дашборд</title>
+  <meta name="robots" content="noindex,nofollow" />
+`);
 </script>

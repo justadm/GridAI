@@ -58,6 +58,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
+import { useHead } from '../../composables/useHead';
 
 const api = useApi();
 const { isAuthed } = useAuth();
@@ -94,4 +95,9 @@ const submit = async () => {
     formMessage.value = 'Не удалось создать профиль.';
   }
 };
+
+useHead(`
+  <title>SkillRadar — Профили ролей</title>
+  <meta name="robots" content="noindex,nofollow" />
+`);
 </script>

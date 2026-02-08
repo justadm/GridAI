@@ -68,3 +68,15 @@
     </div>
   </section>
 </template>
+
+<script setup lang="ts">
+import { useHead } from '../composables/useHead';
+
+useHead(`
+  <title>SkillRadar — умный подбор вакансий и HR‑аналитика</title>
+  <meta name="description" content="SkillRadar — телеграм‑бот для подбора вакансий, рынка навыков и HR‑аналитики." />
+  <meta property="og:title" content="SkillRadar — умный подбор вакансий и HR‑аналитика" />
+  <meta property="og:description" content="Подбор вакансий, рынок навыков и B2B‑аналитика для HR." />
+  <meta property="og:type" content="website" />
+`);
+</script>

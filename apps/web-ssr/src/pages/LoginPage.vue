@@ -35,12 +35,18 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useHead } from '../composables/useHead';
 
 const email = ref('');
 const token = ref('');
 const loginMessage = ref('');
 const verifyMessage = ref('');
 const router = useRouter();
+
+useHead(`
+  <title>SkillRadar — Вход</title>
+  <meta name="robots" content="noindex,nofollow" />
+`);
 
 const sendLink = async () => {
   loginMessage.value = '';
