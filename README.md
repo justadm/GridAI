@@ -228,9 +228,18 @@ npm install
 cp .env.example .env
 ```
 
-4. Установить systemd unit:
+4. Установить systemd unit (вариант A — через NVM):
 ```bash
 sudo cp /opt/skillradar/deploy/skillradar.service /etc/systemd/system/skillradar.service
+sudo systemctl daemon-reload
+sudo systemctl enable skillradar
+sudo systemctl start skillradar
+sudo systemctl status skillradar
+```
+
+Вариант B — без NVM (system node):
+```bash
+sudo cp /opt/skillradar/deploy/skillradar.systemnode.service /etc/systemd/system/skillradar.service
 sudo systemctl daemon-reload
 sudo systemctl enable skillradar
 sudo systemctl start skillradar
