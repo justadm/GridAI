@@ -40,6 +40,11 @@ function initDb() {
       stats_json TEXT NOT NULL,
       fetched_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS llm_cache (
+      cache_key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      fetched_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -78,6 +83,39 @@ function saveQuery(userId, type, rawText, filters) {
     .run(userId, type, rawText, JSON.stringify(filters), new Date().toISOString());
 }
 
+function getVacancyCache(vacancyId) {
+  const db = getDb();
+  return db.prepare('SELECT raw_json, fetched_at FROM vacancies_cache WHERE vacancy_id = ?').get(vacancyId);
+}
+
+function saveVacancyCache(vacancyId, rawJson) {
+  const db = getDb();
+  db.prepare('INSERT OR REPLACE INTO vacancies_cache (vacancy_id, raw_json, fetched_at) VALUES (?, ?, ?)')
+    .run(String(vacancyId), JSON.stringify(rawJson), new Date().toISOString());
+}
+
+function getMarketCache(queryKey) {
+  const db = getDb();
+  return db.prepare('SELECT stats_json, fetched_at FROM market_cache WHERE query_key = ?').get(queryKey);
+}
+
+function saveMarketCache(queryKey, stats) {
+  const db = getDb();
+  db.prepare('INSERT OR REPLACE INTO market_cache (query_key, stats_json, fetched_at) VALUES (?, ?, ?)')
+    .run(String(queryKey), JSON.stringify(stats), new Date().toISOString());
+}
+
+function getLlmCache(cacheKey) {
+  const db = getDb();
+  return db.prepare('SELECT value_json, fetched_at FROM llm_cache WHERE cache_key = ?').get(cacheKey);
+}
+
+function saveLlmCache(cacheKey, value) {
+  const db = getDb();
+  db.prepare('INSERT OR REPLACE INTO llm_cache (cache_key, value_json, fetched_at) VALUES (?, ?, ?)')
+    .run(String(cacheKey), JSON.stringify(value), new Date().toISOString());
+}
+
 module.exports = {
   initDb,
   getDb,
@@ -85,5 +123,11 @@ module.exports = {
   addStopWord,
   removeStopWord,
   listStopWords,
-  saveQuery
+  saveQuery,
+  getVacancyCache,
+  saveVacancyCache,
+  getMarketCache,
+  saveMarketCache,
+  getLlmCache,
+  saveLlmCache
 };

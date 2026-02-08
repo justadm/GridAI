@@ -1,9 +1,12 @@
+const crypto = require('crypto');
 const OpenAI = require('openai');
 const { z } = require('zod');
+const { getLlmCache, saveLlmCache } = require('../db');
 
 const apiKey = process.env.OPENAI_API_KEY;
 const modelMain = process.env.OPENAI_MODEL_MAIN || 'gpt-4.1-mini';
 const modelMarket = process.env.OPENAI_MODEL_MARKET || 'gpt-4.1-nano';
+const LLM_CACHE_TTL_MS = Number(process.env.LLM_CACHE_TTL_MS || 24 * 60 * 60 * 1000);
 
 const client = new OpenAI({ apiKey });
 
@@ -37,7 +40,34 @@ function safeJsonParse(text) {
   }
 }
 
+function hashText(text) {
+  return crypto.createHash('sha1').update(String(text)).digest('hex');
+}
+
+function getCacheJson(cacheKey) {
+  const cached = getLlmCache(cacheKey);
+  if (!cached) return null;
+  const age = Date.now() - new Date(cached.fetched_at).getTime();
+  if (age > LLM_CACHE_TTL_MS) return null;
+  try {
+    return JSON.parse(cached.value_json);
+  } catch (_) {
+    return null;
+  }
+}
+
+function setCacheJson(cacheKey, value) {
+  saveLlmCache(cacheKey, value);
+}
+
 async function parseCriteria(rawText) {
+  const cacheKey = `criteria:${hashText(rawText)}`;
+  const cached = getCacheJson(cacheKey);
+  if (cached) {
+    const data = CriteriaSchema.safeParse(cached);
+    if (data.success) return data.data;
+  }
+
   const system = 'Ты парсер вакансий для hh.ru (РФ). Верни строго JSON без пояснений.';
   const user = `Извлеки из текста критерии: роль, навыки, зарплата (число), уровень (junior|middle|senior), ключевые слова, исключения ("не хочу").\n\nТекст: ${rawText}`;
 
@@ -57,12 +87,29 @@ async function parseCriteria(rawText) {
   if (!data.success) {
     return CriteriaSchema.parse({});
   }
+  setCacheJson(cacheKey, data.data);
   return data.data;
 }
 
 async function explainFits(vacancies, criteria) {
   if (!vacancies.length) return {};
-  const items = vacancies.map(v => ({
+  const criteriaKey = hashText(JSON.stringify(criteria || {}));
+  const result = {};
+
+  const missing = [];
+  for (const v of vacancies) {
+    const key = `explain:${v.id}:${criteriaKey}`;
+    const cached = getCacheJson(key);
+    if (cached && typeof cached.text === 'string') {
+      result[v.id] = cached.text;
+    } else {
+      missing.push(v);
+    }
+  }
+
+  if (!missing.length) return result;
+
+  const items = missing.map(v => ({
     id: v.id,
     name: v.name,
     employer: v.employer?.name || '',
@@ -86,8 +133,16 @@ async function explainFits(vacancies, criteria) {
 
   const content = res.choices?.[0]?.message?.content || '{}';
   const parsed = safeJsonParse(content);
-  if (!parsed || typeof parsed !== 'object') return {};
-  return parsed;
+  if (parsed && typeof parsed === 'object') {
+    Object.entries(parsed).forEach(([id, text]) => {
+      if (typeof text === 'string') {
+        result[id] = text;
+        const key = `explain:${id}:${criteriaKey}`;
+        setCacheJson(key, { text });
+      }
+    });
+  }
+  return result;
 }
 
 async function marketComment(stats, query) {
