@@ -11,10 +11,17 @@ const SRPortal = (() => {
 
   const loadJson = async page => {
     try {
-      const base = window.SR_API_BASE || '../data';
+      const defaultBase = '../data';
+      const base = window.SR_API_BASE || localStorage.getItem('sr-api-base') || defaultBase;
       const useJson = !base.includes('/api');
       const url = useJson ? `${base}/${page}.json` : `${base}/${page}`;
-      const res = await fetch(url, { cache: 'no-store' });
+      const headers = { 'Content-Type': 'application/json' };
+      const token = localStorage.getItem('sr-token');
+      if (token && !useJson) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(url, { cache: 'no-store', headers });
+      if (res.status === 401) {
+        throw new Error('UNAUTHORIZED');
+      }
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -224,6 +231,10 @@ const SRPortal = (() => {
     const data = await loadJson(page);
     if (!data) {
       showState('error');
+      const error = qs('[data-sr-error]');
+      if (error && localStorage.getItem('sr-token') === null && (window.SR_API_BASE || '').includes('/api')) {
+        error.textContent = 'Нужна авторизация. Откройте /login.html и войдите.';
+      }
       return;
     }
     showState('ready');
