@@ -259,3 +259,8 @@ sudo tail -f /var/log/skillradar.log
 ```bash
 open /Users/just/Sites/sbdb.loc/web/index.html
 ```
+
+Админ‑страница:
+```bash
+open /Users/just/Sites/sbdb.loc/web/admin.html
+```

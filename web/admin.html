@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SkillRadar — Admin</title>
+    <meta name="description" content="Админ‑страница SkillRadar" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="grid"></div>
+    </div>
+
+    <header class="top">
+      <div class="brand">
+        <span class="logo">SR</span>
+        <span class="name">SkillRadar Admin</span>
+      </div>
+      <nav class="nav">
+        <a href="index.html">Лендинг</a>
+        <a href="#status">Статус</a>
+        <a href="#ops">Операции</a>
+      </nav>
+      <a class="cta" href="https://t.me/skillradar_bot" target="_blank" rel="noreferrer">Открыть бота</a>
+    </header>
+
+    <main>
+      <section class="section" id="status">
+        <h2>Статус</h2>
+        <div class="grid-3">
+          <div class="feature">
+            <h3>Бот</h3>
+            <p>Команда: <code>/status</code></p>
+            <p>Проверка мок‑режима и TTL.</p>
+          </div>
+          <div class="feature">
+            <h3>Админ‑доступ</h3>
+            <p>Команда: <code>/admin</code></p>
+            <p>Последние запросы и активность.</p>
+          </div>
+          <div class="feature">
+            <h3>Chat ID</h3>
+            <p>Команда: <code>/id</code></p>
+            <p>Для диагностики и интеграций.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="ops">
+        <h2>Операции</h2>
+        <div class="steps">
+          <div class="step">
+            <span>01</span>
+            <p>Перезапуск бота: <code>pkill -f "node src/index.js"</code></p>
+          </div>
+          <div class="step">
+            <span>02</span>
+            <p>Запуск: <code>nohup npm run dev &gt; bot.log 2&gt;&amp;1 &amp;</code></p>
+          </div>
+          <div class="step">
+            <span>03</span>
+            <p>Логи: <code>tail -f /Users/just/Sites/sbdb.loc/bot.log</code></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section cta-block" id="access">
+        <div>
+          <h2>Доступы</h2>
+          <p>Список админ‑ID хранится в <code>.env</code> → <code>ADMIN_TG_IDS</code>.</p>
+        </div>
+        <a class="btn primary" href="mailto:hello@skillradar.ai">Связаться</a>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>SkillRadar © 2026</span>
+      <span>Админ‑панель</span>
+    </footer>
+  </body>
+</html>
