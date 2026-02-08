@@ -4,7 +4,7 @@ const { searchVacancies } = require('../hh/client');
 const { criteriaToSearchParams } = require('../hh/mappers');
 const { rankVacancies } = require('../score/scoring');
 const { computeMarketStats } = require('../market/market');
-const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery, getMarketCache, saveMarketCache, listRecentQueries } = require('../db');
+const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery, getMarketCache, saveMarketCache, listRecentQueries, setUserMode, getUserMode } = require('../db');
 const { escapeHtml, includesAny } = require('../utils/text');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -22,7 +22,10 @@ const STATE = {
   AWAIT_SEARCH: 'await_search',
   AWAIT_MARKET: 'await_market',
   STOP_ADD: 'stop_add',
-  STOP_REMOVE: 'stop_remove'
+  STOP_REMOVE: 'stop_remove',
+  B2B_MARKET: 'b2b_market',
+  B2B_COMP: 'b2b_comp',
+  B2B_TEMPLATE: 'b2b_template'
 };
 
 const userState = new Map();
@@ -58,8 +61,21 @@ function rateLimitOk(tgId) {
 function mainMenu() {
   return Markup.keyboard([
     ['Подбор вакансий', 'Рынок навыков'],
-    ['Мои стоп-слова']
+    ['Мои стоп-слова', 'B2B Аналитика']
   ]).resize();
+}
+
+function b2bMenu() {
+  return Markup.keyboard([
+    ['Рынок роли', 'Конкуренты'],
+    ['Шаблон вакансии', 'Соискательский режим'],
+    ['Главное меню']
+  ]).resize();
+}
+
+function menuForUser(userId) {
+  const mode = getUserMode(userId);
+  return mode === 'b2b' ? b2bMenu() : mainMenu();
 }
 
 function stoplistMenu() {
@@ -316,6 +332,75 @@ async function handleMarket(ctx, text) {
   await ctx.reply('Главное меню', mainMenu());
 }
 
+async function handleB2BMarket(ctx, text) {
+  await ctx.reply('Собираю аналитику рынка…', { reply_markup: { remove_keyboard: true } });
+  const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
+  const first = await searchVacancies(params, 0, 50);
+  let items = first.items || [];
+  if ((first.pages || 0) > 1) {
+    const second = await searchVacancies(params, 1, 50);
+    items = items.concat(second.items || []);
+  }
+  const stats = computeMarketStats(items, first.found || items.length);
+  const topSkills = uniqTopSkills(stats.top_skills || [], 7);
+  const msg = [
+    `<b>Рынок: ${escapeHtml(text)}</b>`,
+    `Вакансий (оценка): ${stats.total_found}`,
+    `Удаленка: ~${stats.remote_share}%`,
+    stats.salary_from_avg ? `Средняя "от": ${stats.salary_from_avg} RUR` : 'Средняя "от": —',
+    stats.salary_to_avg ? `Средняя "до": ${stats.salary_to_avg} RUR` : 'Средняя "до": —',
+    topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
+  ].filter(Boolean).join('\n');
+  await ctx.reply(msg, { parse_mode: 'HTML' });
+  await ctx.reply('B2B меню', b2bMenu());
+}
+
+async function handleB2BCompetitors(ctx, text) {
+  await ctx.reply('Собираю список конкурентов…', { reply_markup: { remove_keyboard: true } });
+  const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
+  const first = await searchVacancies(params, 0, 50);
+  let items = first.items || [];
+  if ((first.pages || 0) > 1) {
+    const second = await searchVacancies(params, 1, 50);
+    items = items.concat(second.items || []);
+  }
+  const counts = new Map();
+  for (const v of items) {
+    const name = v.employer?.name || '—';
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  const top = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const lines = top.map((t, i) => `${i + 1}. ${t[0]} — ${t[1]}`);
+  const msg = [
+    `<b>Конкуренты: ${escapeHtml(text)}</b>`,
+    lines.length ? lines.join('\n') : 'Нет данных'
+  ].join('\n');
+  await ctx.reply(msg, { parse_mode: 'HTML' });
+  await ctx.reply('B2B меню', b2bMenu());
+}
+
+async function handleB2BTemplate(ctx, text) {
+  await ctx.reply('Формирую шаблон вакансии…', { reply_markup: { remove_keyboard: true } });
+  const params = { text, area: process.env.HH_AREA_DEFAULT || '113' };
+  const first = await searchVacancies(params, 0, 50);
+  let items = first.items || [];
+  if ((first.pages || 0) > 1) {
+    const second = await searchVacancies(params, 1, 50);
+    items = items.concat(second.items || []);
+  }
+  const stats = computeMarketStats(items, first.found || items.length);
+  const topSkills = uniqTopSkills(stats.top_skills || [], 6);
+  const msg = [
+    `<b>Шаблон вакансии: ${escapeHtml(text)}</b>`,
+    stats.salary_from_avg && stats.salary_to_avg
+      ? `Рекомендуемая вилка: ${stats.salary_from_avg}–${stats.salary_to_avg} RUR`
+      : 'Рекомендуемая вилка: —',
+    topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
+  ].join('\n');
+  await ctx.reply(msg, { parse_mode: 'HTML' });
+  await ctx.reply('B2B меню', b2bMenu());
+}
+
 async function handleStoplist(ctx) {
   const user = getOrCreateUser(ctx.from.id);
   const list = listStopWords(user.id);
@@ -351,7 +436,8 @@ function startBot() {
   bot.command('reset', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
     searchCache.delete(String(ctx.from.id));
-    await ctx.reply('Состояние сброшено. Главное меню:', mainMenu());
+    const user = getOrCreateUser(ctx.from.id);
+    await ctx.reply('Состояние сброшено. Главное меню:', menuForUser(user.id));
   });
 
   bot.command('help', async ctx => {
@@ -394,9 +480,10 @@ function startBot() {
   });
 
   bot.start(async ctx => {
-    getOrCreateUser(ctx.from.id);
+    const user = getOrCreateUser(ctx.from.id);
     setState(ctx.from.id, STATE.IDLE);
-    await ctx.reply('Привет! Я помогу подобрать вакансии и показать рынок.', mainMenu());
+    const mode = getUserMode(user.id);
+    await ctx.reply('Привет! Я помогу подобрать вакансии и показать рынок.', mode === 'b2b' ? b2bMenu() : mainMenu());
   });
 
   bot.hears('Подбор вакансий', async ctx => {
@@ -414,6 +501,20 @@ function startBot() {
     await handleStoplist(ctx);
   });
 
+  bot.hears('B2B Аналитика', async ctx => {
+    const user = getOrCreateUser(ctx.from.id);
+    setUserMode(user.id, 'b2b');
+    setState(ctx.from.id, STATE.IDLE);
+    await ctx.reply('Режим HR‑аналитики включен.', b2bMenu());
+  });
+
+  bot.hears('Соискательский режим', async ctx => {
+    const user = getOrCreateUser(ctx.from.id);
+    setUserMode(user.id, 'jobseeker');
+    setState(ctx.from.id, STATE.IDLE);
+    await ctx.reply('Соискательский режим включен.', mainMenu());
+  });
+
   bot.hears('Добавить стоп-слово', async ctx => {
     setState(ctx.from.id, STATE.STOP_ADD);
     await ctx.reply('Отправь слово или компанию (можно через запятую).');
@@ -426,13 +527,15 @@ function startBot() {
 
   bot.hears('Назад', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
-    await ctx.reply('Главное меню', mainMenu());
+    const user = getOrCreateUser(ctx.from.id);
+    await ctx.reply('Главное меню', menuForUser(user.id));
   });
 
   bot.hears('Главное меню', async ctx => {
     setState(ctx.from.id, STATE.IDLE);
     searchCache.delete(String(ctx.from.id));
-    await ctx.reply('Главное меню', mainMenu());
+    const user = getOrCreateUser(ctx.from.id);
+    await ctx.reply('Главное меню', menuForUser(user.id));
   });
 
   bot.hears('Показать еще', async ctx => {
@@ -443,11 +546,13 @@ function startBot() {
     const tgId = ctx.from.id;
     const entry = searchCache.get(String(tgId));
     if (!entry) {
-      await ctx.reply('Нет активного поиска для сохранения.', mainMenu());
+      const user = getOrCreateUser(tgId);
+      await ctx.reply('Нет активного поиска для сохранения.', menuForUser(user.id));
       return;
     }
     savedQueries.set(String(tgId), entry);
-    await ctx.reply('Запрос сохранен. Используй команду /repeat, чтобы повторить.', mainMenu());
+    const user = getOrCreateUser(tgId);
+    await ctx.reply('Запрос сохранен. Используй команду /repeat, чтобы повторить.', menuForUser(user.id));
   });
 
   bot.command('repeat', async ctx => {
@@ -459,6 +564,21 @@ function startBot() {
     }
     searchCache.set(String(tgId), { ...entry, index: 0 });
     await sendNextBatch(ctx);
+  });
+
+  bot.hears('Рынок роли', async ctx => {
+    setState(ctx.from.id, STATE.B2B_MARKET);
+    await ctx.reply('Введите роль или навык для рынка.', { reply_markup: { remove_keyboard: true } });
+  });
+
+  bot.hears('Конкуренты', async ctx => {
+    setState(ctx.from.id, STATE.B2B_COMP);
+    await ctx.reply('Введите роль или навык для конкурентов.', { reply_markup: { remove_keyboard: true } });
+  });
+
+  bot.hears('Шаблон вакансии', async ctx => {
+    setState(ctx.from.id, STATE.B2B_TEMPLATE);
+    await ctx.reply('Введите роль и уровень (например: Backend Middle, Москва).', { reply_markup: { remove_keyboard: true } });
   });
 
   bot.on('text', async ctx => {
@@ -482,6 +602,21 @@ function startBot() {
         await handleMarket(ctx, text);
         return;
       }
+      if (state === STATE.B2B_MARKET) {
+        setState(ctx.from.id, STATE.IDLE);
+        await handleB2BMarket(ctx, text);
+        return;
+      }
+      if (state === STATE.B2B_COMP) {
+        setState(ctx.from.id, STATE.IDLE);
+        await handleB2BCompetitors(ctx, text);
+        return;
+      }
+      if (state === STATE.B2B_TEMPLATE) {
+        setState(ctx.from.id, STATE.IDLE);
+        await handleB2BTemplate(ctx, text);
+        return;
+      }
       if (state === STATE.STOP_ADD) {
         const user = getOrCreateUser(ctx.from.id);
         text.split(',').map(s => s.trim()).filter(Boolean).forEach(w => addStopWord(user.id, w));
@@ -497,7 +632,8 @@ function startBot() {
     } catch (err) {
       console.error('[bot:error]', err);
       await ctx.reply('Похоже, есть проблема с сетью или API. Попробуйте позже.');
-      await ctx.reply('Главное меню', mainMenu());
+      const user = getOrCreateUser(ctx.from.id);
+      await ctx.reply('Главное меню', menuForUser(user.id));
     }
   });
 

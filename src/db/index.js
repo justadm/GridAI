@@ -46,6 +46,16 @@ function initDb() {
       fetched_at TEXT NOT NULL
     );
   `);
+
+  ensureColumn('users', 'mode', 'TEXT', 'jobseeker');
+}
+
+function ensureColumn(table, column, type, defaultValue) {
+  const info = db.prepare(`PRAGMA table_info(${table})`).all();
+  const exists = info.some(c => c.name === column);
+  if (!exists) {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ?`).run(defaultValue);
+  }
 }
 
 function getDb() {
@@ -58,7 +68,7 @@ function getOrCreateUser(tgId, region = 'RU') {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM users WHERE tg_id = ?').get(String(tgId));
   if (existing) return existing;
-  const res = db.prepare('INSERT INTO users (tg_id, region, created_at) VALUES (?, ?, ?)').run(String(tgId), region, now);
+  const res = db.prepare('INSERT INTO users (tg_id, region, created_at, mode) VALUES (?, ?, ?, ?)').run(String(tgId), region, now, 'jobseeker');
   return db.prepare('SELECT * FROM users WHERE id = ?').get(res.lastInsertRowid);
 }
 
@@ -86,6 +96,17 @@ function saveQuery(userId, type, rawText, filters) {
 function listRecentQueries(limit = 10) {
   const db = getDb();
   return db.prepare('SELECT q.id, q.user_id, q.type, q.raw_text, q.created_at, u.tg_id FROM queries q JOIN users u ON u.id = q.user_id ORDER BY q.id DESC LIMIT ?').all(limit);
+}
+
+function setUserMode(userId, mode) {
+  const db = getDb();
+  db.prepare('UPDATE users SET mode = ? WHERE id = ?').run(mode, userId);
+}
+
+function getUserMode(userId) {
+  const db = getDb();
+  const row = db.prepare('SELECT mode FROM users WHERE id = ?').get(userId);
+  return row?.mode || 'jobseeker';
 }
 
 function getVacancyCache(vacancyId) {
@@ -135,5 +156,7 @@ module.exports = {
   saveMarketCache,
   getLlmCache,
   saveLlmCache,
-  listRecentQueries
+  listRecentQueries,
+  setUserMode,
+  getUserMode
 };
