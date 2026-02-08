@@ -86,6 +86,10 @@ const toggleForm = () => {
 };
 
 const submit = async () => {
+  if (!isAuthed.value) {
+    formMessage.value = 'Нужна авторизация.';
+    return;
+  }
   try {
     await api.inviteTeam(form);
     formMessage.value = 'Приглашение отправлено.';

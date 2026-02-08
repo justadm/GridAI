@@ -20,9 +20,13 @@
               <li class="nav-item"><RouterLink class="nav-link" to="/portal/competitors">Конкуренты</RouterLink></li>
               <li class="nav-item"><RouterLink class="nav-link" to="/portal/template">Шаблон</RouterLink></li>
             </ul>
-            <div class="d-flex gap-2">
+            <div class="d-flex align-items-center gap-2">
               <RouterLink class="btn btn-outline-secondary" to="/ui-kit">UI‑kit</RouterLink>
-              <RouterLink class="btn btn-outline-secondary" to="/login">Войти</RouterLink>
+              <template v-if="isAuthed">
+                <span class="text-secondary small">{{ userLabel }}</span>
+                <button class="btn btn-outline-secondary" @click="logout">Выйти</button>
+              </template>
+              <RouterLink v-else class="btn btn-outline-secondary" to="/login">Войти</RouterLink>
             </div>
           </div>
         </div>
@@ -57,8 +61,22 @@
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
+import { useUser } from '../composables/useUser';
 
-const { isAuthed } = useAuth();
+const { isAuthed, setToken } = useAuth();
+const { profile, loadProfile, setProfile } = useUser();
+
+onMounted(() => {
+  loadProfile();
+});
+
+const userLabel = computed(() => profile.value?.email || 'Пользователь');
+
+const logout = () => {
+  setToken(null);
+  setProfile(null);
+};
 </script>

@@ -36,12 +36,14 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useHead } from '../composables/useHead';
+import { useUser } from '../composables/useUser';
 
 const email = ref('');
 const token = ref('');
 const loginMessage = ref('');
 const verifyMessage = ref('');
 const router = useRouter();
+const { setProfile } = useUser();
 
 useHead(`
   <title>SkillRadar — Вход</title>
@@ -77,6 +79,7 @@ const verify = async () => {
   }
   localStorage.setItem('sr-token', data.token);
   localStorage.setItem('sr-api-base', '/api/v1');
+  setProfile({ email: data.user?.email, role: data.user?.role });
   verifyMessage.value = 'Готово! Переходим в портал…';
   setTimeout(() => router.push('/portal'), 800);
 };

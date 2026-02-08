@@ -112,6 +112,10 @@ const toggleForm = () => {
 };
 
 const submit = async () => {
+  if (!isAuthed.value) {
+    formMessage.value = 'Нужна авторизация.';
+    return;
+  }
   try {
     const res = await api.createReport(form);
     formMessage.value = `Отчёт создан: ${res.id}`;
