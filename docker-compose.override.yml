@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  web:
+    environment:
+      - NODE_ENV=development
+      - WEB_PORT=3000
+    command: ["npm", "run", "dev:ssr"]
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+
+  bot:
+    environment:
+      - NODE_ENV=development
+    command: ["npm", "run", "dev"]
+    volumes:
+      - ./:/app
+      - /app/node_modules

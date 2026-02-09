@@ -230,6 +230,19 @@ docker compose up -d --build web
 - База SQLite хранится в `./data` (volume).
 - Для bot и web используйте одинаковый `.env`.
 
+### Dev‑режим
+Для локальной разработки используйте `docker-compose.override.yml`:
+```bash
+docker compose up -d --build
+```
+В dev будет использоваться `npm run dev:ssr` и `npm run dev` (hot reload).
+
+### Runtime‑образ
+Для минимального прод‑образа есть `Dockerfile.runtime`:
+```bash
+docker build -f Dockerfile.runtime -t skillradar-runtime .
+```
+
 ---
 
 ## 13. Тест‑сценарии

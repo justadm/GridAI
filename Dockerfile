@@ -1,7 +1,9 @@
-FROM node:22-bullseye AS build
+FROM node:22-bullseye AS base
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
+
+FROM base AS build
 COPY . .
 RUN npm run build:ssr
 
