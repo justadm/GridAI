@@ -105,6 +105,13 @@ function initDb() {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS b2b_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      day TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(user_id, day)
+    );
   `);
 
   ensureColumn('users', 'mode', 'TEXT', 'jobseeker');
@@ -384,6 +391,24 @@ function deleteTeamMember(orgId, userId) {
   return true;
 }
 
+function getB2BUsage(userId, dayKey) {
+  const db = getDb();
+  const row = db.prepare('SELECT count FROM b2b_usage WHERE user_id = ? AND day = ?').get(userId, dayKey);
+  return row?.count || 0;
+}
+
+function incrementB2BUsage(userId, dayKey) {
+  const db = getDb();
+  const existing = db.prepare('SELECT count FROM b2b_usage WHERE user_id = ? AND day = ?').get(userId, dayKey);
+  if (!existing) {
+    db.prepare('INSERT INTO b2b_usage (user_id, day, count) VALUES (?, ?, ?)').run(userId, dayKey, 1);
+    return 1;
+  }
+  const next = existing.count + 1;
+  db.prepare('UPDATE b2b_usage SET count = ? WHERE user_id = ? AND day = ?').run(next, userId, dayKey);
+  return next;
+}
+
 module.exports = {
   initDb,
   getDb,
@@ -417,5 +442,7 @@ module.exports = {
   listTeam,
   inviteTeamMember,
   updateTeamRole,
-  deleteTeamMember
+  deleteTeamMember,
+  getB2BUsage,
+  incrementB2BUsage
 };

@@ -5,7 +5,7 @@ const { searchVacancies } = require('../hh/client');
 const { criteriaToSearchParams } = require('../hh/mappers');
 const { rankVacancies } = require('../score/scoring');
 const { computeMarketStats } = require('../market/market');
-const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery, getMarketCache, saveMarketCache, listRecentQueries, setUserMode, getUserMode } = require('../db');
+const { getOrCreateUser, listStopWords, addStopWord, removeStopWord, saveQuery, getMarketCache, saveMarketCache, listRecentQueries, setUserMode, getUserMode, getB2BUsage, incrementB2BUsage } = require('../db');
 const { escapeHtml, includesAny } = require('../utils/text');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -13,6 +13,7 @@ const STARTED_AT = Date.now();
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
 const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 10);
 const ADMIN_TG_IDS = String(process.env.ADMIN_TG_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const B2B_DAILY_LIMIT = Number(process.env.B2B_DAILY_LIMIT || 3);
 
 const rateBuckets = new Map();
 const searchCache = new Map();
@@ -101,7 +102,7 @@ function b2bMenu() {
   return Markup.keyboard([
     ['Рынок роли', 'Конкуренты'],
     ['Шаблон вакансии', 'Экспорт отчета'],
-    ['Соискательский режим'],
+    ['Тарифы и лимиты', 'Соискательский режим'],
     ['Главное меню']
   ]).resize();
 }
@@ -131,6 +132,36 @@ function formatSalary(salary) {
   const to = salary.to ? `до ${salary.to}` : '';
   const sep = from && to ? ' ' : '';
   return `${from}${sep}${to} ${salary.currency || ''}`.trim();
+}
+
+function getDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function b2bPaywallMessage() {
+  return [
+    'Лимит B2B‑отчетов на сегодня исчерпан.',
+    `Текущий лимит: ${B2B_DAILY_LIMIT} отчетов/день.`,
+    'Напишите нам, чтобы увеличить лимит или подключить тариф.',
+    'Контакт: @skillradar_hr_bot'
+  ].join('\n');
+}
+
+function b2bPricingMessage() {
+  return [
+    '<b>Тарифы B2B (пилот)</b>',
+    'Starter — 3 отчета/день, 1 пользователь, 1 роль в фокусе.',
+    'Pro — 10 отчетов/день, до 3 пользователей, экспорт PDF.',
+    'Team — 30 отчетов/день, до 10 пользователей, SLA и кастом.',
+    '',
+    'Чтобы подключить тариф — напишите: @skillradar_hr_bot'
+  ].join('\n');
+}
+
+function canUseB2B(user) {
+  const dayKey = getDayKey();
+  const used = getB2BUsage(user.id, dayKey);
+  return { used, allowed: used < B2B_DAILY_LIMIT, dayKey };
 }
 
 function extractUserFilters(text) {
@@ -462,6 +493,13 @@ async function handleMarket(ctx, text) {
 }
 
 async function handleB2BMarket(ctx, text) {
+  const user = getOrCreateUser(ctx.from.id);
+  const limit = canUseB2B(user);
+  if (!limit.allowed) {
+    await ctx.reply(b2bPaywallMessage());
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   await ctx.reply('Собираю аналитику рынка…', { reply_markup: { remove_keyboard: true } });
   const cacheKey = `b2b:market:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
   const cached = getMarketCache(cacheKey);
@@ -484,6 +522,7 @@ async function handleB2BMarket(ctx, text) {
       topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
     ].filter(Boolean).join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    incrementB2BUsage(user.id, limit.dayKey);
     b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
@@ -514,11 +553,19 @@ async function handleB2BMarket(ctx, text) {
     topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
   ].filter(Boolean).join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  incrementB2BUsage(user.id, limit.dayKey);
   b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
 async function handleB2BCompetitors(ctx, text) {
+  const user = getOrCreateUser(ctx.from.id);
+  const limit = canUseB2B(user);
+  if (!limit.allowed) {
+    await ctx.reply(b2bPaywallMessage());
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   await ctx.reply('Собираю список конкурентов…', { reply_markup: { remove_keyboard: true } });
   const cacheKey = `b2b:comp:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
   const cached = getMarketCache(cacheKey);
@@ -531,6 +578,7 @@ async function handleB2BCompetitors(ctx, text) {
       lines.length ? lines : 'Нет данных'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    incrementB2BUsage(user.id, limit.dayKey);
     b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
@@ -559,11 +607,19 @@ async function handleB2BCompetitors(ctx, text) {
     lines.length ? lines.join('\n') : 'Нет данных'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  incrementB2BUsage(user.id, limit.dayKey);
   b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
 async function handleB2BTemplate(ctx, text) {
+  const user = getOrCreateUser(ctx.from.id);
+  const limit = canUseB2B(user);
+  if (!limit.allowed) {
+    await ctx.reply(b2bPaywallMessage());
+    await ctx.reply('B2B меню', b2bMenu());
+    return;
+  }
   await ctx.reply('Формирую шаблон вакансии…', { reply_markup: { remove_keyboard: true } });
   const cacheKey = `b2b:template:${String(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;
   const cached = getMarketCache(cacheKey);
@@ -579,6 +635,7 @@ async function handleB2BTemplate(ctx, text) {
       topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    incrementB2BUsage(user.id, limit.dayKey);
     b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
@@ -602,6 +659,7 @@ async function handleB2BTemplate(ctx, text) {
     topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  incrementB2BUsage(user.id, limit.dayKey);
   b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
@@ -732,6 +790,18 @@ function startBot() {
     setUserMode(user.id, 'b2b');
     setState(ctx.from.id, STATE.IDLE);
     await ctx.reply('Режим HR‑аналитики включен.', b2bMenu());
+  });
+
+  bot.hears('Тарифы и лимиты', async ctx => {
+    const user = getOrCreateUser(ctx.from.id);
+    const { used } = canUseB2B(user);
+    const msg = [
+      b2bPricingMessage(),
+      '',
+      `Сегодня использовано: ${used}/${B2B_DAILY_LIMIT}`
+    ].join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+    await ctx.reply('B2B меню', b2bMenu());
   });
 
   bot.hears('Экспорт отчета', async ctx => {
