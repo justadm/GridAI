@@ -43,6 +43,38 @@
     <div v-if="state.loading" class="alert alert-info">Загружаем команду…</div>
     <div v-if="state.error" class="alert alert-danger">Не удалось загрузить команду.</div>
 
+    <div class="card mb-3" v-if="state.data">
+      <div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label">Поиск</label>
+            <input v-model="filters.query" class="form-control" placeholder="Имя или email" />
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Роль</label>
+            <select v-model="filters.role" class="form-select">
+              <option value="">Все</option>
+              <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
+              <option value="analyst">Analyst</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Статус</label>
+            <select v-model="filters.status" class="form-select">
+              <option value="">Все</option>
+              <option value="active">Active</option>
+              <option value="invited">Invitation pending</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-outline-secondary w-100" type="button" @click="resetFilters">Сбросить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card" v-if="state.data">
       <div class="card-body">
         <div class="table-responsive">
@@ -57,7 +89,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="member in state.data.members" :key="member.id || member.email">
+              <tr v-for="member in filteredMembers" :key="member.id || member.email">
                 <td>{{ member.name }}</td>
                 <td>{{ member.email || '—' }}</td>
                 <td>
@@ -106,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
 import { useAccess } from '../../composables/useAccess';
@@ -126,6 +158,7 @@ const formMessage = ref('');
 const form = reactive({ email: '', role: 'analyst' });
 const showDelete = ref(false);
 const pendingDelete = ref<any | null>(null);
+const filters = reactive({ query: '', role: '', status: '' });
 
 const loadTeam = async () => {
   try {
@@ -139,6 +172,26 @@ const loadTeam = async () => {
 };
 
 onMounted(loadTeam);
+
+const filteredMembers = computed(() => {
+  if (!state.data?.members) return [];
+  return state.data.members.filter((member: any) => {
+    const q = filters.query.toLowerCase();
+    const name = String(member.name || '').toLowerCase();
+    const email = String(member.email || '').toLowerCase();
+    const queryOk = !q || name.includes(q) || email.includes(q);
+    const roleOk = !filters.role || String(member.role || '').toLowerCase() === filters.role;
+    const status = String(member.access || '').toLowerCase().includes('invitation') ? 'invited' : 'active';
+    const statusOk = !filters.status || status === filters.status;
+    return queryOk && roleOk && statusOk;
+  });
+});
+
+const resetFilters = () => {
+  filters.query = '';
+  filters.role = '';
+  filters.status = '';
+};
 
 const toggleForm = () => {
   showForm.value = !showForm.value;
