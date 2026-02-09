@@ -139,7 +139,7 @@ async function explainFits(vacancies, criteria) {
     responsibility: v.snippet?.responsibility || ''
   }));
 
-  const system = 'Сгенерируй короткое объяснение (1-2 предложения), почему вакансия подходит. Верни JSON объект: {"id": "text"}. Только JSON.';
+  const system = 'Сгенерируй короткое объяснение (1-2 предложения), почему вакансия подходит. Укажи 1-2 конкретные причины (навыки/опыт/зарплата/формат). Верни JSON объект: {"id": "text"}. Только JSON.';
   const user = `Критерии пользователя: ${JSON.stringify(criteria)}\n\nВакансии: ${JSON.stringify(items)}`;
 
   const res = await client.chat.completions.create({

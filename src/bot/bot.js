@@ -16,6 +16,7 @@ const ADMIN_TG_IDS = String(process.env.ADMIN_TG_IDS || '').split(',').map(s => 
 const rateBuckets = new Map();
 const searchCache = new Map();
 const savedQueries = new Map();
+const b2bReportCache = new Map();
 
 const STATE = {
   IDLE: 'idle',
@@ -68,7 +69,8 @@ function mainMenu() {
 function b2bMenu() {
   return Markup.keyboard([
     ['Рынок роли', 'Конкуренты'],
-    ['Шаблон вакансии', 'Соискательский режим'],
+    ['Шаблон вакансии', 'Экспорт отчета'],
+    ['Соискательский режим'],
     ['Главное меню']
   ]).resize();
 }
@@ -348,6 +350,7 @@ async function handleB2BMarket(ctx, text) {
       topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
     ].filter(Boolean).join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -370,6 +373,7 @@ async function handleB2BMarket(ctx, text) {
     topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
   ].filter(Boolean).join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -385,6 +389,7 @@ async function handleB2BCompetitors(ctx, text) {
       lines.length ? lines : 'Нет данных'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -411,6 +416,7 @@ async function handleB2BCompetitors(ctx, text) {
     lines.length ? lines.join('\n') : 'Нет данных'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -429,6 +435,7 @@ async function handleB2BTemplate(ctx, text) {
       topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
+    b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -450,6 +457,7 @@ async function handleB2BTemplate(ctx, text) {
     topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
+  b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -531,6 +539,26 @@ function startBot() {
     await ctx.reply(lines.join('\n\n'));
   });
 
+  bot.command('debug', async ctx => {
+    if (!isAdmin(ctx.from.id)) {
+      await ctx.reply('Недостаточно прав.');
+      return;
+    }
+    const msg = [
+      '<b>SkillRadar debug</b>',
+      `NODE_ENV: ${process.env.NODE_ENV || 'development'}`,
+      `HH area: ${process.env.HH_AREA_DEFAULT || '113'}`,
+      `HH cache TTL: ${process.env.HH_CACHE_TTL_MS || '21600000'}`,
+      `LLM cache TTL: ${process.env.LLM_CACHE_TTL_MS || '86400000'}`,
+      `USE_MOCKS: ${String(process.env.USE_MOCKS || 'false')}`
+    ].join('\n');
+    await ctx.reply(msg, { parse_mode: 'HTML' });
+  });
+
+  bot.command('health', async ctx => {
+    await ctx.reply('ok');
+  });
+
   bot.start(async ctx => {
     const user = getOrCreateUser(ctx.from.id);
     setState(ctx.from.id, STATE.IDLE);
@@ -558,6 +586,18 @@ function startBot() {
     setUserMode(user.id, 'b2b');
     setState(ctx.from.id, STATE.IDLE);
     await ctx.reply('Режим HR‑аналитики включен.', b2bMenu());
+  });
+
+  bot.hears('Экспорт отчета', async ctx => {
+    const cached = b2bReportCache.get(String(ctx.from.id));
+    if (!cached) {
+      await ctx.reply('Сначала сформируйте отчет (рынок/конкуренты/шаблон).', b2bMenu());
+      return;
+    }
+    const content = `${cached.title}\n\n${cached.body}`;
+    const filename = `skillradar-report-${Date.now()}.txt`;
+    await ctx.replyWithDocument({ source: Buffer.from(content, 'utf8'), filename }, { caption: 'Экспорт отчета' });
+    await ctx.reply('B2B меню', b2bMenu());
   });
 
   bot.hears('Соискательский режим', async ctx => {
