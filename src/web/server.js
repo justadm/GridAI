@@ -67,12 +67,19 @@ async function notifyLead(lead) {
   const tgChat = process.env.LEAD_TG_CHAT_ID;
   const emailTo = process.env.LEAD_EMAIL_TO;
 
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
   const message = [
-    'Новая заявка SkillRadar',
-    `Email: ${lead.email}`,
-    lead.company ? `Компания: ${lead.company}` : null,
-    lead.message ? `Комментарий: ${lead.message}` : null,
-    `Источник: ${lead.source}`
+    '<b>Новая заявка SkillRadar</b>',
+    `Email: <code>${escapeHtml(lead.email)}</code>`,
+    lead.company ? `Компания: ${escapeHtml(lead.company)}` : null,
+    lead.message ? `Комментарий: ${escapeHtml(lead.message)}` : null,
+    `Источник: ${escapeHtml(lead.source)}`
   ].filter(Boolean).join('\n');
 
   if (tgToken && tgChat) {
@@ -80,7 +87,7 @@ async function notifyLead(lead) {
       await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: tgChat, text: message })
+        body: JSON.stringify({ chat_id: tgChat, text: message, parse_mode: 'HTML' })
       });
     } catch (err) {
       console.error('[leads] telegram notify failed', err);
@@ -121,6 +128,20 @@ function requireAuth(req, res, next) {
   if (!user) return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid token' } });
   req.user = user;
   next();
+}
+
+const roleRank = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
+
+function requireRole(minRole) {
+  return (req, res, next) => {
+    const current = String(req.user?.role || 'viewer').toLowerCase();
+    const currentRank = roleRank[current] ?? 0;
+    const minRank = roleRank[minRole] ?? 0;
+    if (currentRank < minRank) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } });
+    }
+    next();
+  };
 }
 
 function buildApiRouter() {
@@ -204,7 +225,7 @@ function buildApiRouter() {
     });
   });
 
-  app.post(`${API_BASE}/reports`, requireAuth, (req, res) => {
+  app.post(`${API_BASE}/reports`, requireAuth, requireRole('analyst'), (req, res) => {
     if (!req.body?.role) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Role is required', details: { field: 'role' } } });
     }
@@ -220,7 +241,7 @@ function buildApiRouter() {
     res.json(report);
   });
 
-  app.get(`${API_BASE}/reports/:id/export`, requireAuth, async (req, res) => {
+  app.get(`${API_BASE}/reports/:id/export`, requireAuth, requireRole('analyst'), async (req, res) => {
     const report = getReport(req.user.org_id, req.params.id);
     if (!report) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Report not found' } });
@@ -254,7 +275,7 @@ function buildApiRouter() {
     }))});
   });
 
-  app.post(`${API_BASE}/roles`, requireAuth, (req, res) => {
+  app.post(`${API_BASE}/roles`, requireAuth, requireRole('analyst'), (req, res) => {
     if (!req.body?.role) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Role is required', details: { field: 'role' } } });
     }
@@ -262,12 +283,12 @@ function buildApiRouter() {
     res.json(role);
   });
 
-  app.delete(`${API_BASE}/roles/:id`, requireAuth, (req, res) => {
+  app.delete(`${API_BASE}/roles/:id`, requireAuth, requireRole('admin'), (req, res) => {
     deleteRoleProfile(req.user.org_id, req.params.id);
     res.json({ status: 'deleted' });
   });
 
-  app.delete(`${API_BASE}/reports/:id`, requireAuth, (req, res) => {
+  app.delete(`${API_BASE}/reports/:id`, requireAuth, requireRole('admin'), (req, res) => {
     const report = getReport(req.user.org_id, req.params.id);
     if (!report) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Report not found' } });
@@ -288,7 +309,7 @@ function buildApiRouter() {
     res.json(readMock('template'));
   });
 
-  app.get(`${API_BASE}/team`, requireAuth, (req, res) => {
+  app.get(`${API_BASE}/team`, requireAuth, requireRole('admin'), (req, res) => {
     const items = listTeam(req.user.org_id);
     res.json({ members: items.map(user => ({
       name: user.name || user.email,
@@ -297,7 +318,7 @@ function buildApiRouter() {
     }))});
   });
 
-  app.post(`${API_BASE}/team/invite`, requireAuth, (req, res) => {
+  app.post(`${API_BASE}/team/invite`, requireAuth, requireRole('admin'), (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const role = req.body?.role || 'analyst';
     if (!email || !email.includes('@')) {
@@ -307,30 +328,30 @@ function buildApiRouter() {
     res.json({ status: 'invited', user });
   });
 
-  app.patch(`${API_BASE}/team/:id`, requireAuth, (req, res) => {
+  app.patch(`${API_BASE}/team/:id`, requireAuth, requireRole('admin'), (req, res) => {
     const role = req.body?.role;
     const user = updateTeamRole(req.user.org_id, req.params.id, role);
     res.json({ status: 'updated', user });
   });
 
-  app.delete(`${API_BASE}/team/:id`, requireAuth, (req, res) => {
+  app.delete(`${API_BASE}/team/:id`, requireAuth, requireRole('admin'), (req, res) => {
     deleteTeamMember(req.user.org_id, req.params.id);
     res.json({ status: 'deleted' });
   });
 
-  app.get(`${API_BASE}/billing/plan`, requireAuth, (req, res) => {
+  app.get(`${API_BASE}/billing/plan`, requireAuth, requireRole('owner'), (req, res) => {
     res.json(readMock('billing'));
   });
 
-  app.get(`${API_BASE}/billing`, requireAuth, (req, res) => {
+  app.get(`${API_BASE}/billing`, requireAuth, requireRole('owner'), (req, res) => {
     res.json(readMock('billing'));
   });
 
-  app.get(`${API_BASE}/settings`, requireAuth, (req, res) => {
+  app.get(`${API_BASE}/settings`, requireAuth, requireRole('admin'), (req, res) => {
     res.json(readMock('settings'));
   });
 
-  app.post(`${API_BASE}/billing/checkout`, requireAuth, (req, res) => {
+  app.post(`${API_BASE}/billing/checkout`, requireAuth, requireRole('owner'), (req, res) => {
     res.json({ url: 'https://example.com/checkout' });
   });
 
