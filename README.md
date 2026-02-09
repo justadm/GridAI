@@ -256,6 +256,26 @@ sudo cp deploy/docker-logs.conf /etc/logrotate.d/skillradar-docker
 sudo logrotate -f /etc/logrotate.d/skillradar-docker
 ```
 
+### Мониторинг (простые алерты)
+Добавлен контейнер `monitor`, который пингует web и отправляет алерты в TG.
+Настройки в `.env` / `.env.docker.example`:
+```
+ALERT_TG_BOT_TOKEN=
+ALERT_TG_CHAT_ID=
+ALERT_URL=http://web:3000
+ALERT_INTERVAL=60
+```
+
+### Systemd (docker compose)
+Шаблон юнита: `deploy/skillradar-docker.service`
+```bash
+sudo cp deploy/skillradar-docker.service /etc/systemd/system/skillradar-docker.service
+sudo systemctl daemon-reload
+sudo systemctl enable skillradar-docker
+sudo systemctl start skillradar-docker
+sudo systemctl status skillradar-docker
+```
+
 ---
 
 ## 13. Тест‑сценарии
