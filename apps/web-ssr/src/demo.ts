@@ -83,5 +83,11 @@ export const demoData = {
       { label: 'Запросов', value: '120 / месяц' },
       { label: 'Экспортов', value: '30 / месяц' }
     ]
+  },
+  leads: {
+    items: [
+      { id: 12, company: 'Acme HR', email: 'lead@acme.com', message: 'Нужен отчет по backend', source: 'pricing', status: 'new', note: '', created_at: '2026-02-09T09:40:00Z' },
+      { id: 11, company: 'Beta Tech', email: 'hr@beta.com', message: 'Интересует B2B пилот', source: 'contacts', status: 'qualified', note: 'Позвонить в среду', created_at: '2026-02-09T09:10:00Z' }
+    ]
   }
 };

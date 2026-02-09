@@ -95,6 +95,7 @@ export function useApi() {
     updateTeamRole: (id: string, payload: any) => apiPatch(`team/${id}`, payload),
     deleteTeamMember: (id: string) => apiDelete(`team/${id}`),
     deleteRole: (id: string) => apiDelete(`roles/${id}`),
-    startCheckout: (plan: string) => apiPost('billing/checkout', { plan })
+    startCheckout: (plan: string) => apiPost('billing/checkout', { plan }),
+    updateLead: (id: string, payload: any) => apiPatch(`leads/${id}`, payload)
   };
 }

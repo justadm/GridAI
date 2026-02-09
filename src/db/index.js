@@ -118,6 +118,8 @@ function initDb() {
       email TEXT NOT NULL,
       message TEXT,
       source TEXT,
+      status TEXT DEFAULT 'new',
+      note TEXT,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS audit_logs (
@@ -431,16 +433,27 @@ function createLead(payload) {
   const email = String(payload.email || '').trim().toLowerCase();
   const message = payload.message || '';
   const source = payload.source || 'unknown';
+  const status = payload.status || 'new';
+  const note = payload.note || '';
   const createdAt = new Date().toISOString();
-  db.prepare('INSERT INTO leads (company, email, message, source, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(company, email, message, source, createdAt);
-  return { email, source, created_at: createdAt };
+  db.prepare('INSERT INTO leads (company, email, message, source, status, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(company, email, message, source, status, note, createdAt);
+  return { email, source, status, note, created_at: createdAt };
 }
 
 function listLeads(limit = 50, offset = 0) {
   const db = getDb();
-  return db.prepare('SELECT id, company, email, message, source, created_at FROM leads ORDER BY id DESC LIMIT ? OFFSET ?')
+  return db.prepare('SELECT id, company, email, message, source, status, note, created_at FROM leads ORDER BY id DESC LIMIT ? OFFSET ?')
     .all(limit, offset);
+}
+
+function updateLead(id, payload) {
+  const db = getDb();
+  const status = payload.status;
+  const note = payload.note;
+  db.prepare('UPDATE leads SET status = COALESCE(?, status), note = COALESCE(?, note) WHERE id = ?')
+    .run(status ?? null, note ?? null, id);
+  return db.prepare('SELECT id, company, email, message, source, status, note, created_at FROM leads WHERE id = ?').get(id);
 }
 
 function addAuditLog(actorId, action, target, payload) {
@@ -497,5 +510,6 @@ module.exports = {
   createLead,
   listLeads,
   addAuditLog,
-  listAuditLogs
+  listAuditLogs,
+  updateLead
 };

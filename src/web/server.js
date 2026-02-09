@@ -22,6 +22,7 @@ const {
   deleteTeamMember,
   createLead,
   listLeads,
+  updateLead,
   addAuditLog,
   listAuditLogs
 } = require('../db');
@@ -223,7 +224,17 @@ function buildApiRouter() {
     const limit = Number(req.query.limit || 50);
     const offset = Number(req.query.offset || 0);
     const items = listLeads(limit, offset);
+    if (!items.length) {
+      const data = readMock('leads');
+      return res.json({ items: data.items || [], total: (data.items || []).length });
+    }
     res.json({ items, total: items.length });
+  });
+
+  app.patch(`${API_BASE}/leads/:id`, requireAuth, requireRole('admin'), (req, res) => {
+    const lead = updateLead(req.params.id, { status: req.body?.status, note: req.body?.note });
+    addAuditLog(req.user.id, 'lead.update', String(req.params.id), { status: req.body?.status, note: req.body?.note });
+    res.json({ status: 'updated', lead });
   });
 
   app.get(`${API_BASE}/reports`, requireAuth, (req, res) => {
@@ -336,14 +347,16 @@ function buildApiRouter() {
   });
 
   app.get(`${API_BASE}/team`, requireAuth, requireRole('admin'), (req, res) => {
-    const items = listTeam(req.user.org_id);
+    const limit = Number(req.query.limit || 50);
+    const offset = Number(req.query.offset || 0);
+    const items = listTeam(req.user.org_id).slice(offset, offset + limit);
     res.json({ members: items.map(user => ({
       id: user.id,
       name: user.name || user.email,
       email: user.email,
       role: user.role,
       access: user.status === 'invited' ? 'Invitation pending' : 'Active'
-    }))});
+    })), total: items.length });
   });
 
   app.post(`${API_BASE}/team/invite`, requireAuth, requireRole('admin'), (req, res) => {
