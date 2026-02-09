@@ -429,6 +429,12 @@ function createLead(payload) {
   return { email, source, created_at: createdAt };
 }
 
+function listLeads(limit = 50, offset = 0) {
+  const db = getDb();
+  return db.prepare('SELECT id, company, email, message, source, created_at FROM leads ORDER BY id DESC LIMIT ? OFFSET ?')
+    .all(limit, offset);
+}
+
 module.exports = {
   initDb,
   getDb,
@@ -465,5 +471,6 @@ module.exports = {
   deleteTeamMember,
   getB2BUsage,
   incrementB2BUsage,
-  createLead
+  createLead,
+  listLeads
 };

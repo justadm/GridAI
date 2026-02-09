@@ -22,6 +22,7 @@ const {
   deleteTeamMember,
   createLead
 } = require('../db');
+const { listLeads } = require('../db');
 
 const WEB_PORT = process.env.WEB_PORT || 3000;
 const API_BASE = '/api/v1';
@@ -84,10 +85,22 @@ async function notifyLead(lead) {
 
   if (tgToken && tgChat) {
     try {
+      const buttons = [];
+      if (lead.email) {
+        buttons.push([{ text: 'Ответить на email', url: `mailto:${lead.email}` }]);
+      }
+      if (process.env.APP_URL) {
+        buttons.push([{ text: 'Открыть ЛК', url: `${process.env.APP_URL.replace(/\/$/, '')}/portal/leads` }]);
+      }
       await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: tgChat, text: message, parse_mode: 'HTML' })
+        body: JSON.stringify({
+          chat_id: tgChat,
+          text: message,
+          parse_mode: 'HTML',
+          reply_markup: buttons.length ? { inline_keyboard: buttons } : undefined
+        })
       });
     } catch (err) {
       console.error('[leads] telegram notify failed', err);
@@ -202,6 +215,13 @@ function buildApiRouter() {
     });
     await notifyLead(lead);
     res.json({ status: 'ok', lead });
+  });
+
+  app.get(`${API_BASE}/leads`, requireAuth, requireRole('admin'), (req, res) => {
+    const limit = Number(req.query.limit || 50);
+    const offset = Number(req.query.offset || 0);
+    const items = listLeads(limit, offset);
+    res.json({ items, total: items.length });
   });
 
   app.get(`${API_BASE}/reports`, requireAuth, (req, res) => {

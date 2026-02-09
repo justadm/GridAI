@@ -47,6 +47,7 @@
               <RouterLink class="list-group-item list-group-item-action" to="/portal/competitors">Конкуренты</RouterLink>
               <RouterLink class="list-group-item list-group-item-action" to="/portal/template">Шаблон вакансии</RouterLink>
               <RouterLink v-if="canManageTeam" class="list-group-item list-group-item-action" to="/portal/team">Команда</RouterLink>
+              <RouterLink v-if="canViewLeads" class="list-group-item list-group-item-action" to="/portal/leads">Заявки</RouterLink>
               <RouterLink v-if="canManageBilling" class="list-group-item list-group-item-action" to="/portal/billing">Тарифы</RouterLink>
               <RouterLink v-if="canManageSettings" class="list-group-item list-group-item-action" to="/portal/settings">Настройки</RouterLink>
             </div>
@@ -72,7 +73,7 @@ import ToastHost from '../components/ToastHost.vue';
 
 const { isAuthed, setToken } = useAuth();
 const { profile, loadProfile, setProfile } = useUser();
-const { canManageTeam, canManageBilling, canManageSettings } = useAccess();
+const { canManageTeam, canManageBilling, canManageSettings, canViewLeads } = useAccess();
 const api = useApi();
 
 onMounted(async () => {

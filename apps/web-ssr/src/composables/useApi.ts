@@ -70,6 +70,7 @@ export function useApi() {
     getBilling: () => apiGet('billing'),
     getSettings: () => apiGet('settings'),
     getMe: () => apiGet('me'),
+    getLeads: () => apiGet('leads'),
     createReport: (payload: any) => apiPost('reports', payload),
     deleteReport: (id: string) => apiDelete(`reports/${id}`),
     exportReport: (id: string, format: 'pdf' | 'csv' = 'pdf') => apiDownload(`reports/${id}/export?format=${format}`),
