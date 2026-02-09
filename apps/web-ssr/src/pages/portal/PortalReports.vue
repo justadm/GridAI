@@ -5,13 +5,16 @@
         <h1 class="h3 mb-1">Отчёты</h1>
         <p class="text-secondary mb-0">Срезы рынка и B2B‑аналитика.</p>
       </div>
-      <button class="btn btn-primary btn-sm" :disabled="!isAuthed" @click="toggleForm">
+      <button class="btn btn-primary btn-sm" :disabled="!isAuthed || !canCreateReports" @click="toggleForm">
         Новый отчёт
       </button>
     </div>
 
     <div v-if="!isAuthed" class="alert alert-secondary">
       Демо‑режим: чтобы создавать отчёты, войдите в аккаунт.
+    </div>
+    <div v-else-if="!canCreateReports" class="alert alert-warning">
+      У вашей роли нет прав на создание отчётов.
     </div>
 
     <form v-if="showForm" class="card mb-3" @submit.prevent="submit">
@@ -61,17 +64,17 @@
             <input v-model="filters.from" class="form-control" type="date" />
           </div>
           <div class="col-md-2">
-            <button class="btn btn-outline-secondary w-100" type="button" @click="resetFilters">Сбросить</button>
-          </div>
+          <button class="btn btn-outline-secondary w-100" type="button" @click="resetFilters">Сбросить</button>
         </div>
       </div>
+    </div>
     </div>
 
     <div class="card" v-if="state.data">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
           <div class="text-secondary small">Отчётов: {{ filteredItems.length }}</div>
-          <button class="btn btn-outline-secondary btn-sm" :disabled="!filteredItems.length" @click="exportCsv">
+          <button class="btn btn-outline-secondary btn-sm" :disabled="!filteredItems.length || !canExportReports" @click="exportCsv">
             Экспорт CSV
           </button>
         </div>
@@ -95,10 +98,10 @@
                 <td>{{ item.date }}</td>
                 <td><span class="badge" :class="badgeClass(item.status)">{{ item.status }}</span></td>
                 <td class="text-end">
-                  <button class="btn btn-outline-primary btn-sm me-2" :disabled="!isAuthed" @click="downloadPdf(item)">
+                  <button class="btn btn-outline-primary btn-sm me-2" :disabled="!isAuthed || !canExportReports" @click="downloadPdf(item)">
                     PDF
                   </button>
-                  <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed" @click="confirmDelete(item)">
+                  <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed || !canDeleteReports" @click="confirmDelete(item)">
                     Удалить
                   </button>
                 </td>
@@ -135,11 +138,13 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
+import { useAccess } from '../../composables/useAccess';
 import { useHead } from '../../composables/useHead';
 import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
 const { isAuthed } = useAuth();
+const { canCreateReports, canExportReports, canDeleteReports } = useAccess();
 const router = useRouter();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
@@ -191,6 +196,11 @@ const submit = async () => {
     formMessage.value = 'Нужна авторизация.';
     pushToast('Войдите, чтобы создавать отчёты.', 'info');
     router.push('/login');
+    return;
+  }
+  if (!canCreateReports.value) {
+    formMessage.value = 'Недостаточно прав.';
+    pushToast('Недостаточно прав для создания отчёта.', 'warning');
     return;
   }
   try {
@@ -262,6 +272,11 @@ const cancelDelete = () => {
 const performDelete = async () => {
   if (!pendingDelete.value?.id) {
     pushToast('Не удалось определить отчёт для удаления.', 'danger');
+    cancelDelete();
+    return;
+  }
+  if (!canDeleteReports.value) {
+    pushToast('Недостаточно прав для удаления.', 'warning');
     cancelDelete();
     return;
   }

@@ -46,9 +46,9 @@
               <RouterLink class="list-group-item list-group-item-action" to="/portal/roles">Профили ролей</RouterLink>
               <RouterLink class="list-group-item list-group-item-action" to="/portal/competitors">Конкуренты</RouterLink>
               <RouterLink class="list-group-item list-group-item-action" to="/portal/template">Шаблон вакансии</RouterLink>
-              <RouterLink class="list-group-item list-group-item-action" to="/portal/team">Команда</RouterLink>
-              <RouterLink class="list-group-item list-group-item-action" to="/portal/billing">Тарифы</RouterLink>
-              <RouterLink class="list-group-item list-group-item-action" to="/portal/settings">Настройки</RouterLink>
+              <RouterLink v-if="canManageTeam" class="list-group-item list-group-item-action" to="/portal/team">Команда</RouterLink>
+              <RouterLink v-if="canManageBilling" class="list-group-item list-group-item-action" to="/portal/billing">Тарифы</RouterLink>
+              <RouterLink v-if="canManageSettings" class="list-group-item list-group-item-action" to="/portal/settings">Настройки</RouterLink>
             </div>
           </aside>
           <section class="col-lg-10">
@@ -66,16 +66,33 @@ import { computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuth } from '../composables/useAuth';
 import { useUser } from '../composables/useUser';
+import { useAccess } from '../composables/useAccess';
+import { useApi } from '../composables/useApi';
 import ToastHost from '../components/ToastHost.vue';
 
 const { isAuthed, setToken } = useAuth();
 const { profile, loadProfile, setProfile } = useUser();
+const { canManageTeam, canManageBilling, canManageSettings } = useAccess();
+const api = useApi();
 
-onMounted(() => {
+onMounted(async () => {
   loadProfile();
+  if (!isAuthed.value) return;
+  try {
+    const data = await api.getMe();
+    if (data?.user) {
+      setProfile({ email: data.user.email, role: data.user.role });
+    }
+  } catch {
+    // ignore
+  }
 });
 
-const userLabel = computed(() => profile.value?.email || 'Пользователь');
+const userLabel = computed(() => {
+  if (!profile.value?.email) return 'Пользователь';
+  const role = profile.value?.role ? ` · ${profile.value.role}` : '';
+  return `${profile.value.email}${role}`;
+});
 
 const logout = () => {
   setToken(null);

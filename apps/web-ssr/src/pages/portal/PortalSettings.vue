@@ -7,10 +7,14 @@
       </div>
     </div>
 
+    <div v-if="!canManageSettings" class="alert alert-warning">
+      Доступ к настройкам есть только у Owner и Admin.
+    </div>
+
     <div v-if="state.loading" class="alert alert-info">Загружаем настройки…</div>
     <div v-if="state.error" class="alert alert-danger">Не удалось загрузить настройки.</div>
 
-    <div class="row g-3" v-if="state.data">
+    <div class="row g-3" v-if="state.data && canManageSettings">
       <div class="col-lg-6">
         <div class="card h-100">
           <div class="card-body">
@@ -38,9 +42,11 @@
 <script setup lang="ts">
 import { onMounted, reactive } from 'vue';
 import { useApi } from '../../composables/useApi';
+import { useAccess } from '../../composables/useAccess';
 import { useHead } from '../../composables/useHead';
 
 const api = useApi();
+const { canManageSettings } = useAccess();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,

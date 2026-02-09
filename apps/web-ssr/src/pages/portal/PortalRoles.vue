@@ -5,11 +5,14 @@
         <h1 class="h3 mb-1">Профили ролей</h1>
         <p class="text-secondary mb-0">Шаблоны ролей, навыки и вилки.</p>
       </div>
-      <button class="btn btn-outline-secondary btn-sm" :disabled="!isAuthed" @click="toggleForm">Создать профиль</button>
+      <button class="btn btn-outline-secondary btn-sm" :disabled="!isAuthed || !canCreateReports" @click="toggleForm">Создать профиль</button>
     </div>
 
     <div v-if="!isAuthed" class="alert alert-secondary">
       Демо‑режим: создание профилей доступно после входа.
+    </div>
+    <div v-else-if="!canCreateReports" class="alert alert-warning">
+      У вашей роли нет прав на создание профилей.
     </div>
 
     <form v-if="showForm" class="card mb-3" @submit.prevent="submit">
@@ -48,7 +51,7 @@
             <p class="text-secondary">Навыки: {{ item.skills }}</p>
             <div class="d-flex gap-2">
               <button class="btn btn-outline-secondary btn-sm">Открыть</button>
-              <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed" @click="confirmDelete(item)">
+              <button class="btn btn-outline-danger btn-sm" :disabled="!isAuthed || !canDeleteRoles" @click="confirmDelete(item)">
                 Удалить
               </button>
             </div>
@@ -83,11 +86,13 @@ import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
+import { useAccess } from '../../composables/useAccess';
 import { useHead } from '../../composables/useHead';
 import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
 const { isAuthed } = useAuth();
+const { canCreateReports, canDeleteRoles } = useAccess();
 const router = useRouter();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
@@ -125,6 +130,11 @@ const submit = async () => {
     router.push('/login');
     return;
   }
+  if (!canCreateReports.value) {
+    formMessage.value = 'Недостаточно прав.';
+    pushToast('Недостаточно прав для создания профиля.', 'warning');
+    return;
+  }
   try {
     const res = await api.createRole(form);
     formMessage.value = `Профиль создан: ${res.id}`;
@@ -155,6 +165,11 @@ const cancelDelete = () => {
 const performDelete = async () => {
   if (!pendingDelete.value?.id) {
     pushToast('Не удалось определить профиль для удаления.', 'danger');
+    cancelDelete();
+    return;
+  }
+  if (!canDeleteRoles.value) {
+    pushToast('Недостаточно прав для удаления.', 'warning');
     cancelDelete();
     return;
   }

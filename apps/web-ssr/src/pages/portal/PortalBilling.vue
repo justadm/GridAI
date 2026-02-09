@@ -5,13 +5,17 @@
         <h1 class="h3 mb-1">Тарифы</h1>
         <p class="text-secondary mb-0">Подписка и лимиты.</p>
       </div>
-      <button class="btn btn-outline-secondary btn-sm">История платежей</button>
+      <button class="btn btn-outline-secondary btn-sm" :disabled="!canManageBilling">История платежей</button>
+    </div>
+
+    <div v-if="!canManageBilling" class="alert alert-warning">
+      Доступ к биллингу есть только у Owner.
     </div>
 
     <div v-if="state.loading" class="alert alert-info">Загружаем тарифы…</div>
     <div v-if="state.error" class="alert alert-danger">Не удалось загрузить тарифы.</div>
 
-    <div class="row g-3" v-if="state.data">
+    <div class="row g-3" v-if="state.data && canManageBilling">
       <div class="col-md-6 col-lg-4" v-for="plan in state.data.plans" :key="plan.name">
         <div class="card h-100" :class="{ 'border border-primary': plan.featured }">
           <div class="card-body">
@@ -30,9 +34,11 @@
 <script setup lang="ts">
 import { onMounted, reactive } from 'vue';
 import { useApi } from '../../composables/useApi';
+import { useAccess } from '../../composables/useAccess';
 import { useHead } from '../../composables/useHead';
 
 const api = useApi();
+const { canManageBilling } = useAccess();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,

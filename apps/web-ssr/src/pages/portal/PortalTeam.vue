@@ -5,11 +5,14 @@
         <h1 class="h3 mb-1">Команда</h1>
         <p class="text-secondary mb-0">Участники и роли.</p>
       </div>
-      <button class="btn btn-primary btn-sm" :disabled="!isAuthed" @click="toggleForm">Пригласить</button>
+      <button class="btn btn-primary btn-sm" :disabled="!isAuthed || !canManageTeam" @click="toggleForm">Пригласить</button>
     </div>
 
     <div v-if="!isAuthed" class="alert alert-secondary">
       Демо‑режим: приглашения доступны после входа.
+    </div>
+    <div v-else-if="!canManageTeam" class="alert alert-warning">
+      У вашей роли нет прав на управление командой.
     </div>
 
     <form v-if="showForm" class="card mb-3" @submit.prevent="submit">
@@ -57,11 +60,13 @@
 import { onMounted, reactive, ref } from 'vue';
 import { useApi } from '../../composables/useApi';
 import { useAuth } from '../../composables/useAuth';
+import { useAccess } from '../../composables/useAccess';
 import { useHead } from '../../composables/useHead';
 import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
 const { isAuthed } = useAuth();
+const { canManageTeam } = useAccess();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,
@@ -90,6 +95,11 @@ const submit = async () => {
   if (!isAuthed.value) {
     formMessage.value = 'Нужна авторизация.';
     pushToast('Войдите, чтобы приглашать участников.', 'info');
+    return;
+  }
+  if (!canManageTeam.value) {
+    formMessage.value = 'Недостаточно прав.';
+    pushToast('Недостаточно прав для управления командой.', 'warning');
     return;
   }
   try {
