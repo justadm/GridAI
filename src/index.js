@@ -45,8 +45,10 @@ const { startWebServer } = require('./web/server');
 
 function main() {
   initDb();
-  startBot();
-  startWebServer();
+  const disableBot = String(process.env.DISABLE_BOT || '').toLowerCase() === 'true';
+  const disableWeb = String(process.env.DISABLE_WEB || '').toLowerCase() === 'true';
+  if (!disableBot) startBot();
+  if (!disableWeb) startWebServer();
 }
 
 main();

@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+bot.log
+ssr.log
+logs
+.cache
+dist
+.DS_Store
+.git
+.idea
+.vscode
+.env

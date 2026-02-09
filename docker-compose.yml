@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: skillradar-web
+    env_file:
+      - .env
+    environment:
+      - WEB_PORT=3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  bot:
+    build: .
+    container_name: skillradar-bot
+    env_file:
+      - .env
+    environment:
+      - DISABLE_WEB=true
+    command: ["npm", "run", "start"]
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: skillradar-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/skillradar.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+    restart: unless-stopped

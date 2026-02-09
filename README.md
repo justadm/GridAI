@@ -202,6 +202,36 @@ npm start
 
 ---
 
+## Docker
+
+Быстрый запуск (SSR + Bot + Nginx):
+```bash
+docker compose up -d --build
+```
+
+Сервисы:
+- `web` — SSR (порт 3000)
+- `bot` — Telegram‑бот (без web, `DISABLE_WEB=true`)
+- `nginx` — прокси на 80 порт
+
+Полезное:
+```bash
+docker compose logs -f web
+docker compose logs -f bot
+docker compose down
+```
+
+Если нужен только SSR без nginx:
+```bash
+docker compose up -d --build web
+```
+
+Важно:
+- База SQLite хранится в `./data` (volume).
+- Для bot и web используйте одинаковый `.env`.
+
+---
+
 ## 13. Тест‑сценарии
 
 См. `TEST_SCENARIOS.md`.
