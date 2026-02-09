@@ -40,7 +40,7 @@
     <div class="card" v-if="state.data && canViewAudit">
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-          <div class="text-secondary small">Найдено: {{ filteredItems.length }}</div>
+          <div class="text-secondary small">Найдено: {{ state.total }}</div>
           <div class="d-flex align-items-center gap-2">
             <label class="text-secondary small">На странице</label>
             <select v-model.number="pageSize" class="form-select form-select-sm" style="width: auto;">
@@ -93,10 +93,11 @@ import { useHead } from '../../composables/useHead';
 
 const api = useApi();
 const { canViewAudit } = useAccess();
-const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
+const state = reactive<{ loading: boolean; error: boolean; data: any | null; total: number }>({
   loading: true,
   error: false,
-  data: null
+  data: null,
+  total: 0
 });
 const filters = reactive({ query: '', action: '', from: '' });
 const page = ref(1);
@@ -104,19 +105,28 @@ const pageSize = ref(20);
 const router = useRouter();
 const route = useRoute();
 
-onMounted(async () => {
+const loadAudit = async () => {
   if (!canViewAudit.value) {
     state.loading = false;
     return;
   }
   try {
-    state.data = await api.getAudit();
+    state.loading = true;
+    const res = await api.getAudit({
+      q: filters.query || undefined,
+      action: filters.action || undefined,
+      from: filters.from || undefined,
+      limit: pageSize.value,
+      offset: (page.value - 1) * pageSize.value
+    });
+    state.data = res;
+    state.total = res?.total ?? res?.items?.length ?? 0;
   } catch {
     state.error = true;
   } finally {
     state.loading = false;
   }
-});
+};
 
 onMounted(() => {
   const q = route.query;
@@ -124,25 +134,13 @@ onMounted(() => {
   if (typeof q.action === 'string') filters.action = q.action;
   if (typeof q.from === 'string') filters.from = q.from;
   if (typeof q.page === 'string') page.value = Number(q.page) || 1;
+  if (typeof q.size === 'string') pageSize.value = Number(q.size) || 20;
+  loadAudit();
 });
 
-const filteredItems = computed(() => {
-  if (!state.data?.items) return [];
-  const q = filters.query.toLowerCase();
-  return state.data.items.filter((item: any) => {
-    const hay = `${item.actor_id || ''} ${item.action || ''} ${item.target || ''}`.toLowerCase();
-    const queryOk = !q || hay.includes(q);
-    const actionOk = !filters.action || String(item.action || '').toLowerCase().includes(filters.action.toLowerCase());
-    const dateOk = !filters.from || String(item.created_at || '') >= filters.from;
-    return queryOk && actionOk && dateOk;
-  });
-});
-
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize.value)));
-const pagedItems = computed(() => {
-  const start = (page.value - 1) * pageSize.value;
-  return filteredItems.value.slice(start, start + pageSize.value);
-});
+const filteredItems = computed(() => state.data?.items || []);
+const totalPages = computed(() => Math.max(1, Math.ceil(state.total / pageSize.value)));
+const pagedItems = computed(() => filteredItems.value);
 
 const resetFilters = () => {
   filters.query = '';
@@ -151,16 +149,22 @@ const resetFilters = () => {
   page.value = 1;
 };
 
-watch([() => filters.query, () => filters.action, () => filters.from, page], () => {
+watch([() => filters.query, () => filters.action, () => filters.from], () => {
+  page.value = 1;
+});
+
+watch([() => filters.query, () => filters.action, () => filters.from, page, pageSize], () => {
   router.replace({
     query: {
       ...route.query,
       q: filters.query || undefined,
       action: filters.action || undefined,
       from: filters.from || undefined,
-      page: page.value > 1 ? String(page.value) : undefined
+      page: page.value > 1 ? String(page.value) : undefined,
+      size: pageSize.value !== 20 ? String(pageSize.value) : undefined
     }
   });
+  loadAudit();
 });
 
 const formatPayload = (payload: any) => {
