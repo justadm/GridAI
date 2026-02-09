@@ -1,4 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
+const PDFDocument = require('pdfkit');
 const { parseCriteria, explainFits, marketComment } = require('../llm/openai');
 const { searchVacancies } = require('../hh/client');
 const { criteriaToSearchParams } = require('../hh/mappers');
@@ -41,6 +42,36 @@ function getState(tgId) {
 
 function isAdmin(tgId) {
   return ADMIN_TG_IDS.includes(String(tgId));
+}
+
+function decodeHtml(text) {
+  return String(text || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+}
+
+function stripHtml(text) {
+  return decodeHtml(String(text || '').replace(/<[^>]*>/g, ''));
+}
+
+function buildReportPdf(title, body) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.fontSize(18).text(title, { align: 'left' });
+      doc.moveDown();
+      doc.fontSize(12).text(body, { align: 'left' });
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 function rateLimitOk(tgId) {
@@ -350,7 +381,7 @@ async function handleB2BMarket(ctx, text) {
       topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
     ].filter(Boolean).join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
-    b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+    b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -373,7 +404,7 @@ async function handleB2BMarket(ctx, text) {
     topSkills ? `Топ навыков: ${escapeHtml(topSkills)}` : 'Топ навыков: —'
   ].filter(Boolean).join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
-  b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+  b2bReportCache.set(String(ctx.from.id), { title: `Рынок: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -389,7 +420,7 @@ async function handleB2BCompetitors(ctx, text) {
       lines.length ? lines : 'Нет данных'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
-    b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+    b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -416,7 +447,7 @@ async function handleB2BCompetitors(ctx, text) {
     lines.length ? lines.join('\n') : 'Нет данных'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
-  b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+  b2bReportCache.set(String(ctx.from.id), { title: `Конкуренты: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -435,7 +466,7 @@ async function handleB2BTemplate(ctx, text) {
       topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
-    b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+    b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: stripHtml(msg) });
     await ctx.reply('B2B меню', b2bMenu());
     return;
   }
@@ -457,7 +488,7 @@ async function handleB2BTemplate(ctx, text) {
     topSkills ? `Ключевые требования: ${escapeHtml(topSkills)}` : 'Ключевые требования: —'
   ].join('\n');
   await ctx.reply(msg, { parse_mode: 'HTML' });
-  b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: msg.replace(/<[^>]*>/g, '') });
+  b2bReportCache.set(String(ctx.from.id), { title: `Шаблон вакансии: ${text}`, body: stripHtml(msg) });
   await ctx.reply('B2B меню', b2bMenu());
 }
 
@@ -512,8 +543,9 @@ function startBot() {
       '• Зарплата (от/до, в рублях)',
       '• Локация/формат (Москва/СПб, удаленка/офис/гибрид)',
       '• Занятость (полная/частичная/проектная)',
+      '• В B2B: Рынок роли / Конкуренты / Шаблон вакансии / Экспорт отчета',
       '',
-      'Команды: /start, /help, /status, /reset'
+      'Команды: /start, /help, /status, /reset, /health, /debug'
     ].join('\n');
     await ctx.reply(msg, { parse_mode: 'HTML' });
   });
@@ -596,7 +628,10 @@ function startBot() {
     }
     const content = `${cached.title}\n\n${cached.body}`;
     const filename = `skillradar-report-${Date.now()}.txt`;
-    await ctx.replyWithDocument({ source: Buffer.from(content, 'utf8'), filename }, { caption: 'Экспорт отчета' });
+    const pdfBuffer = await buildReportPdf(cached.title, cached.body);
+    const pdfName = `skillradar-report-${Date.now()}.pdf`;
+    await ctx.replyWithDocument({ source: pdfBuffer, filename: pdfName }, { caption: 'Экспорт отчета (PDF)' });
+    await ctx.replyWithDocument({ source: Buffer.from(content, 'utf8'), filename }, { caption: 'Экспорт отчета (TXT)' });
     await ctx.reply('B2B меню', b2bMenu());
   });
 
