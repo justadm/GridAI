@@ -9,6 +9,7 @@
 
     <div v-if="!canManageSettings" class="alert alert-warning">
       Доступ к настройкам есть только у Owner и Admin.
+      Текущая роль: <strong>{{ role }}</strong>
     </div>
 
     <div v-if="state.loading" class="alert alert-info">Загружаем настройки…</div>
@@ -65,7 +66,7 @@ import { useHead } from '../../composables/useHead';
 import { pushToast } from '../../composables/useToast';
 
 const api = useApi();
-const { canManageSettings } = useAccess();
+const { canManageSettings, role } = useAccess();
 const state = reactive<{ loading: boolean; error: boolean; data: any | null }>({
   loading: true,
   error: false,
