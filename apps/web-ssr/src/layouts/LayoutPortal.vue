@@ -72,7 +72,7 @@ import { useAccess } from '../composables/useAccess';
 import { useApi } from '../composables/useApi';
 import ToastHost from '../components/ToastHost.vue';
 
-const { isAuthed, setToken } = useAuth();
+const { isAuthed, setAuthed } = useAuth();
 const { profile, loadProfile, setProfile } = useUser();
 const { canManageTeam, canManageBilling, canManageSettings, canViewLeads, canViewAudit } = useAccess();
 const api = useApi();
@@ -86,7 +86,8 @@ onMounted(async () => {
       setProfile({ email: data.user.email, role: data.user.role });
     }
   } catch {
-    // ignore
+    setAuthed(false);
+    setProfile(null);
   }
 });
 
@@ -96,8 +97,13 @@ const userLabel = computed(() => {
   return `${profile.value.email}${role}`;
 });
 
-const logout = () => {
-  setToken(null);
+const logout = async () => {
+  try {
+    await api.logout();
+  } catch {
+    // ignore transport errors on logout
+  }
+  setAuthed(false);
   setProfile(null);
 };
 </script>

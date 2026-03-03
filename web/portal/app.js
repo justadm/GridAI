@@ -32,9 +32,11 @@ const SRPortal = (() => {
       const endpoint = apiMap[page] || page;
       const url = useJson ? `${base}/${page}.json` : `${base}/${endpoint}`;
       const headers = { 'Content-Type': 'application/json' };
-      const token = localStorage.getItem('sr-token');
-      if (token && !useJson) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(url, { cache: 'no-store', headers });
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers,
+        credentials: useJson ? 'same-origin' : 'include'
+      });
       if (res.status === 401) {
         throw new Error('UNAUTHORIZED');
       }
@@ -249,7 +251,7 @@ const SRPortal = (() => {
     if (!data) {
       showState('error');
       const error = qs('[data-sr-error]');
-      if (error && localStorage.getItem('sr-token') === null && String(getBase()).includes('/api')) {
+      if (error && localStorage.getItem('sr-authed') !== '1' && String(getBase()).includes('/api')) {
         error.innerHTML = 'Нужна авторизация. Откройте <a href=\"/login.html\">страницу входа</a>.';
       }
       return;

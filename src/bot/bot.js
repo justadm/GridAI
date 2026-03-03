@@ -362,7 +362,7 @@ async function handleSearch(ctx, text) {
   const tgId = ctx.from.id;
   const user = getOrCreateUser(tgId);
 
-  console.log(`[search] tg_id=${tgId} text="${text}"`);
+  console.log(`[search] tg_id=${tgId} text_len=${String(text || '').length}`);
   await ctx.reply('Ищу подходящие вакансии…', { reply_markup: { remove_keyboard: true } });
 
   const userFilters = extractUserFilters(text);
@@ -438,7 +438,7 @@ async function handleMarket(ctx, text) {
   const tgId = ctx.from.id;
   const user = getOrCreateUser(tgId);
 
-  console.log(`[market] tg_id=${tgId} text="${text}"`);
+  console.log(`[market] tg_id=${tgId} text_len=${String(text || '').length}`);
   await ctx.reply('Собираю срез рынка…', { reply_markup: { remove_keyboard: true } });
 
   const cacheKey = `market:${(text || '').toLowerCase()}:${process.env.HH_AREA_DEFAULT || '113'}`;

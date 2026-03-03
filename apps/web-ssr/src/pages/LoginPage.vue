@@ -19,7 +19,7 @@
               <form class="mt-4" @submit.prevent="verify">
                 <label class="form-label">Токен</label>
                 <div class="input-group">
-                  <input v-model="token" type="text" class="form-control" placeholder="debug token" required />
+                  <input v-model="token" type="text" class="form-control" placeholder="код из email" required />
                   <button class="btn btn-outline-secondary" type="submit">Подтвердить</button>
                 </div>
               </form>
@@ -33,10 +33,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useHead } from '../composables/useHead';
 import { useUser } from '../composables/useUser';
+import { useAuth } from '../composables/useAuth';
 
 const email = ref('');
 const token = ref('');
@@ -44,17 +45,25 @@ const loginMessage = ref('');
 const verifyMessage = ref('');
 const router = useRouter();
 const { setProfile } = useUser();
+const { setAuthed } = useAuth();
 
 useHead(`
   <title>SkillRadar — Вход</title>
   <meta name="robots" content="noindex,nofollow" />
 `);
 
+onMounted(() => {
+  if (typeof window === 'undefined') return;
+  const maybeToken = new URLSearchParams(window.location.search).get('token');
+  if (maybeToken) token.value = maybeToken;
+});
+
 const sendLink = async () => {
   loginMessage.value = '';
   const res = await fetch('/api/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email: email.value })
   });
   const data = await res.json();
@@ -62,7 +71,7 @@ const sendLink = async () => {
     loginMessage.value = data?.error?.message || 'Ошибка отправки.';
     return;
   }
-  loginMessage.value = data.debug_token ? `Dev token: ${data.debug_token}` : 'Ссылка отправлена на email.';
+  loginMessage.value = 'Код входа отправлен на email.';
 };
 
 const verify = async () => {
@@ -70,6 +79,7 @@ const verify = async () => {
   const res = await fetch('/api/v1/auth/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ token: token.value })
   });
   const data = await res.json();
@@ -77,7 +87,8 @@ const verify = async () => {
     verifyMessage.value = data?.error?.message || 'Ошибка проверки.';
     return;
   }
-  localStorage.setItem('sr-token', data.token);
+  setAuthed(true);
+  localStorage.removeItem('sr-token');
   localStorage.setItem('sr-api-base', '/api/v1');
   setProfile({ email: data.user?.email, role: data.user?.role });
   verifyMessage.value = 'Готово! Переходим в портал…';

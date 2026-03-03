@@ -377,8 +377,8 @@ open /Users/just/Sites/sbdb.loc/web/login.html
 ```
 
 API (dev):
-- `POST /api/v1/auth/login` → вернёт `debug_token` в non‑prod
-- `POST /api/v1/auth/verify` → выдаст `Bearer` токен
+- `POST /api/v1/auth/login` → отправит код входа на email (или в лог консоли в non‑prod без SMTP)
+- `POST /api/v1/auth/verify` → установит httpOnly cookie‑сессию
 
 ---
 

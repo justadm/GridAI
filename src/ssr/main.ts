@@ -19,7 +19,8 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
   const server = app.getHttpAdapter().getInstance();
-  server.use(express.json());
+  server.disable('x-powered-by');
+  server.use(express.json({ limit: '1mb' }));
   server.use(buildApiRouter());
 
   let vite: any;

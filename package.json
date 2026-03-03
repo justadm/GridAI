@@ -8,7 +8,9 @@
     "dev": "nodemon src/index.js",
     "dev:ssr": "node -r ts-node/register src/ssr/main.ts",
     "build:ssr": "vite build --config apps/web-ssr/vite.config.ts && vite build --config apps/web-ssr/vite.config.ssr.ts && tsc",
-    "start:ssr": "node dist/ssr/src/ssr/main.js"
+    "start:ssr": "node dist/ssr/src/ssr/main.js",
+    "lint": "node scripts/lint.js",
+    "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.8",

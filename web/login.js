@@ -12,6 +12,7 @@ loginForm.addEventListener('submit', async e => {
   const res = await fetch(`${apiBase}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ email })
   });
   const data = await res.json();
@@ -20,9 +21,7 @@ loginForm.addEventListener('submit', async e => {
     loginResult.classList.remove('d-none');
     return;
   }
-  loginResult.textContent = data.debug_token
-    ? `Dev token: ${data.debug_token}`
-    : 'Ссылка отправлена на email.';
+  loginResult.textContent = 'Код входа отправлен на email.';
   loginResult.classList.remove('d-none');
 });
 
@@ -33,6 +32,7 @@ verifyForm.addEventListener('submit', async e => {
   const res = await fetch(`${apiBase}/auth/verify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ token })
   });
   const data = await res.json();
@@ -41,7 +41,8 @@ verifyForm.addEventListener('submit', async e => {
     verifyResult.classList.remove('d-none');
     return;
   }
-  localStorage.setItem('sr-token', data.token);
+  localStorage.setItem('sr-authed', '1');
+  localStorage.removeItem('sr-token');
   localStorage.setItem('sr-api-base', apiBase);
   verifyResult.textContent = 'Готово! Переходим в портал…';
   verifyResult.classList.remove('d-none');

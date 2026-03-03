@@ -1,27 +1,27 @@
 import { ref, computed, onMounted } from 'vue';
 
-const token = ref<string | null>(typeof window !== 'undefined' ? localStorage.getItem('sr-token') : null);
+const authed = ref<boolean>(typeof window !== 'undefined' ? localStorage.getItem('sr-authed') === '1' : false);
 
 export function useAuth() {
-  const isAuthed = computed(() => Boolean(token.value));
+  const isAuthed = computed(() => authed.value);
 
-  const loadToken = () => {
+  const loadAuth = () => {
     if (typeof window === 'undefined') return;
-    token.value = localStorage.getItem('sr-token');
+    authed.value = localStorage.getItem('sr-authed') === '1';
   };
 
-  const setToken = (value: string | null) => {
-    token.value = value;
+  const setAuthed = (value: boolean) => {
+    authed.value = value;
     if (typeof window !== 'undefined') {
       if (value) {
-        localStorage.setItem('sr-token', value);
+        localStorage.setItem('sr-authed', '1');
       } else {
-        localStorage.removeItem('sr-token');
+        localStorage.removeItem('sr-authed');
       }
     }
   };
 
-  onMounted(loadToken);
+  onMounted(loadAuth);
 
-  return { token, isAuthed, loadToken, setToken };
+  return { isAuthed, loadAuth, setAuthed };
 }

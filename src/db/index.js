@@ -145,6 +145,7 @@ function initDb() {
   `);
 
   ensureColumn('users', 'mode', 'TEXT', 'jobseeker');
+  ensureColumn('audit_logs', 'org_id', 'TEXT', '');
 }
 
 function ensureColumn(table, column, type, defaultValue) {
@@ -270,21 +271,28 @@ function ensureDefaultOrg() {
   return id;
 }
 
-function createOrGetWebUser(email) {
+function getWebUserForLogin(email) {
   const db = getDb();
   const existing = db.prepare('SELECT * FROM web_users WHERE email = ?').get(email.toLowerCase());
-  if (existing) {
-    if (existing.status !== 'active') {
-      db.prepare('UPDATE web_users SET status = ? WHERE id = ?').run('active', existing.id);
-    }
-    return db.prepare('SELECT * FROM web_users WHERE id = ?').get(existing.id);
+  if (!existing) return null;
+  if (existing.status === 'deleted') return null;
+  if (existing.status === 'invited') {
+    db.prepare('UPDATE web_users SET status = ? WHERE id = ?').run('active', existing.id);
   }
-  const orgId = ensureDefaultOrg();
+  return db.prepare('SELECT * FROM web_users WHERE id = ?').get(existing.id);
+}
+
+function createBootstrapOwnerIfAllowed(email) {
+  const bootstrapEmail = String(process.env.BOOTSTRAP_OWNER_EMAIL || '').trim().toLowerCase();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!bootstrapEmail || normalizedEmail !== bootstrapEmail) return null;
+  const db = getDb();
   const count = db.prepare('SELECT COUNT(*) as cnt FROM web_users').get().cnt;
-  const role = count === 0 ? 'owner' : 'analyst';
+  if (count > 0) return null;
+  const orgId = ensureDefaultOrg();
   const id = require('crypto').randomUUID();
   db.prepare('INSERT INTO web_users (id, email, name, role, org_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, email.toLowerCase(), email.split('@')[0], role, orgId, 'active', new Date().toISOString());
+    .run(id, normalizedEmail, normalizedEmail.split('@')[0], 'owner', orgId, 'active', new Date().toISOString());
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(id);
 }
 
@@ -303,6 +311,12 @@ function getSessionUser(token) {
   if (!session) return null;
   if (new Date(session.expires_at).getTime() < Date.now()) return null;
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(session.user_id);
+}
+
+function deleteSession(token) {
+  const db = getDb();
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(String(token || ''));
+  return true;
 }
 
 function getWebUserById(userId) {
@@ -498,18 +512,33 @@ function countTeam(orgId, filters = {}) {
 
 function inviteTeamMember(orgId, email, role = 'analyst') {
   const db = getDb();
-  const existing = db.prepare('SELECT * FROM web_users WHERE email = ?').get(email.toLowerCase());
-  if (existing) return existing;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const existingInOrg = db.prepare('SELECT * FROM web_users WHERE email = ? AND org_id = ?').get(normalizedEmail, orgId);
+  if (existingInOrg) {
+    if (existingInOrg.status === 'deleted') {
+      db.prepare('UPDATE web_users SET status = ?, role = ? WHERE id = ? AND org_id = ?')
+        .run('invited', role, existingInOrg.id, orgId);
+      return db.prepare('SELECT * FROM web_users WHERE id = ? AND org_id = ?').get(existingInOrg.id, orgId);
+    }
+    return existingInOrg;
+  }
+  const existingOtherOrg = db.prepare("SELECT * FROM web_users WHERE email = ? AND org_id != ? AND status != 'deleted'")
+    .get(normalizedEmail, orgId);
+  if (existingOtherOrg) {
+    const err = new Error('User with this email already belongs to another organization');
+    err.code = 'EMAIL_IN_USE_IN_OTHER_ORG';
+    throw err;
+  }
   const id = require('crypto').randomUUID();
   db.prepare('INSERT INTO web_users (id, email, name, role, org_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .run(id, email.toLowerCase(), email.split('@')[0], role, orgId, 'invited', new Date().toISOString());
+    .run(id, normalizedEmail, normalizedEmail.split('@')[0], role, orgId, 'invited', new Date().toISOString());
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(id);
 }
 
 function updateTeamRole(orgId, userId, role) {
   const db = getDb();
   db.prepare('UPDATE web_users SET role = ? WHERE id = ? AND org_id = ?').run(role, userId, orgId);
-  return db.prepare('SELECT * FROM web_users WHERE id = ?').get(userId);
+  return db.prepare('SELECT * FROM web_users WHERE id = ? AND org_id = ?').get(userId, orgId);
 }
 
 function deleteTeamMember(orgId, userId) {
@@ -606,25 +635,25 @@ function updateLead(id, payload) {
   return db.prepare('SELECT id, company, email, message, source, status, note, created_at FROM leads WHERE id = ?').get(id);
 }
 
-function addAuditLog(actorId, action, target, payload) {
+function addAuditLog(orgId, actorId, action, target, payload) {
   const db = getDb();
   const createdAt = new Date().toISOString();
-  db.prepare('INSERT INTO audit_logs (actor_id, action, target, payload_json, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(actorId || null, action, target || null, payload ? JSON.stringify(payload) : null, createdAt);
+  db.prepare('INSERT INTO audit_logs (org_id, actor_id, action, target, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(orgId || '', actorId || null, action, target || null, payload ? JSON.stringify(payload) : null, createdAt);
   return true;
 }
 
-function listAuditLogs(limit = 50, offset = 0) {
+function listAuditLogs(orgId, limit = 50, offset = 0) {
   const db = getDb();
-  return db.prepare('SELECT id, actor_id, action, target, payload_json, created_at FROM audit_logs ORDER BY id DESC LIMIT ? OFFSET ?')
-    .all(limit, offset)
+  return db.prepare('SELECT id, org_id, actor_id, action, target, payload_json, created_at FROM audit_logs WHERE org_id = ? ORDER BY id DESC LIMIT ? OFFSET ?')
+    .all(orgId, limit, offset)
     .map(row => ({ ...row, payload: row.payload_json ? JSON.parse(row.payload_json) : null }));
 }
 
-function listAuditLogsFiltered(filters = {}, limit = 50, offset = 0) {
+function listAuditLogsFiltered(orgId, filters = {}, limit = 50, offset = 0) {
   const db = getDb();
-  const clauses = ['1=1'];
-  const params = [];
+  const clauses = ['org_id = ?'];
+  const params = [orgId];
   if (filters.query) {
     clauses.push('(actor_id LIKE ? OR action LIKE ? OR target LIKE ?)');
     params.push(`%${filters.query}%`, `%${filters.query}%`, `%${filters.query}%`);
@@ -638,15 +667,15 @@ function listAuditLogsFiltered(filters = {}, limit = 50, offset = 0) {
     params.push(filters.from);
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-  return db.prepare(`SELECT id, actor_id, action, target, payload_json, created_at FROM audit_logs ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+  return db.prepare(`SELECT id, org_id, actor_id, action, target, payload_json, created_at FROM audit_logs ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
     .all(...params, limit, offset)
     .map(row => ({ ...row, payload: row.payload_json ? JSON.parse(row.payload_json) : null }));
 }
 
-function countAuditLogs(filters = {}) {
+function countAuditLogs(orgId, filters = {}) {
   const db = getDb();
-  const clauses = ['1=1'];
-  const params = [];
+  const clauses = ['org_id = ?'];
+  const params = [orgId];
   if (filters.query) {
     clauses.push('(actor_id LIKE ? OR action LIKE ? OR target LIKE ?)');
     params.push(`%${filters.query}%`, `%${filters.query}%`, `%${filters.query}%`);
@@ -728,8 +757,10 @@ module.exports = {
   createAuthToken,
   consumeAuthToken,
   createSession,
+  deleteSession,
   getSessionUser,
-  createOrGetWebUser,
+  getWebUserForLogin,
+  createBootstrapOwnerIfAllowed,
   getWebUserById,
   listReports,
   listReportsFiltered,

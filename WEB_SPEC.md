@@ -105,7 +105,7 @@
 
 ### 4.1 Общие правила
 - **Base URL:** `/api/v1`
-- **Auth:** `Authorization: Bearer <token>`
+- **Auth:** httpOnly cookie session (`sr_session`), fallback Bearer допустим только для совместимости
 - **Пагинация:** `limit` (по умолчанию 20), `offset`
 - **Ошибка (единый формат):**
   ```json
@@ -175,7 +175,7 @@
   - response: `{ "status": "sent" }`
 - `POST /api/v1/auth/verify`
   - body: `{ "token": "magic_token" }`
-  - response: `{ "token": "jwt", "user": { ... } }`
+  - response: `{ "status": "ok", "user": { ... }, "expires_at": "..." }` + `Set-Cookie: sr_session=...`
 
 ### 4.4 Reports
 - `GET /api/v1/reports?limit=20&offset=0`

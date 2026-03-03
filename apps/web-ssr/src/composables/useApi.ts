@@ -4,75 +4,93 @@ import { useAuth } from './useAuth';
 const apiBase = '/api/v1';
 
 async function apiGet<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const { token } = useAuth();
-  if (!token.value) {
+  const { isAuthed, setAuthed } = useAuth();
+  if (!isAuthed.value) {
     return (demoData as any)[path] as T;
   }
   const qs = params
     ? `?${Object.entries(params).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')}`
     : '';
   const res = await fetch(`${apiBase}/${path}${qs}`, {
+    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token.value}`
+      'Content-Type': 'application/json'
     }
   });
+  if (res.status === 401) {
+    setAuthed(false);
+    throw new Error('UNAUTHORIZED');
+  }
   if (!res.ok) throw new Error('API_ERROR');
   return res.json();
 }
 
 async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  const { token } = useAuth();
-  if (!token.value) throw new Error('UNAUTHORIZED');
+  const { isAuthed, setAuthed } = useAuth();
+  if (!isAuthed.value) throw new Error('UNAUTHORIZED');
   const res = await fetch(`${apiBase}/${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token.value}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
   });
+  if (res.status === 401) {
+    setAuthed(false);
+    throw new Error('UNAUTHORIZED');
+  }
   if (!res.ok) throw new Error('API_ERROR');
   return res.json();
 }
 
 async function apiDelete<T>(path: string): Promise<T> {
-  const { token } = useAuth();
-  if (!token.value) throw new Error('UNAUTHORIZED');
+  const { isAuthed, setAuthed } = useAuth();
+  if (!isAuthed.value) throw new Error('UNAUTHORIZED');
   const res = await fetch(`${apiBase}/${path}`, {
     method: 'DELETE',
+    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token.value}`
+      'Content-Type': 'application/json'
     }
   });
+  if (res.status === 401) {
+    setAuthed(false);
+    throw new Error('UNAUTHORIZED');
+  }
   if (!res.ok) throw new Error('API_ERROR');
   return res.json();
 }
 
 async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  const { token } = useAuth();
-  if (!token.value) throw new Error('UNAUTHORIZED');
+  const { isAuthed, setAuthed } = useAuth();
+  if (!isAuthed.value) throw new Error('UNAUTHORIZED');
   const res = await fetch(`${apiBase}/${path}`, {
     method: 'PATCH',
+    credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token.value}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
   });
+  if (res.status === 401) {
+    setAuthed(false);
+    throw new Error('UNAUTHORIZED');
+  }
   if (!res.ok) throw new Error('API_ERROR');
   return res.json();
 }
 
 async function apiDownload(path: string): Promise<Blob> {
-  const { token } = useAuth();
-  if (!token.value) throw new Error('UNAUTHORIZED');
+  const { isAuthed, setAuthed } = useAuth();
+  if (!isAuthed.value) throw new Error('UNAUTHORIZED');
   const res = await fetch(`${apiBase}/${path}`, {
-    headers: {
-      Authorization: `Bearer ${token.value}`
-    }
+    credentials: 'include'
   });
+  if (res.status === 401) {
+    setAuthed(false);
+    throw new Error('UNAUTHORIZED');
+  }
   if (!res.ok) throw new Error('API_ERROR');
   return res.blob();
 }
@@ -101,6 +119,7 @@ export function useApi() {
     deleteRole: (id: string) => apiDelete(`roles/${id}`),
     startCheckout: (plan: string) => apiPost('billing/checkout', { plan }),
     startHhOauth: () => apiPost<{ url: string }>('hh/oauth/start', {}),
-    updateLead: (id: string, payload: any) => apiPatch(`leads/${id}`, payload)
+    updateLead: (id: string, payload: any) => apiPatch(`leads/${id}`, payload),
+    logout: () => apiPost('auth/logout', {})
   };
 }
