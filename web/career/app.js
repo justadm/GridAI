@@ -1,5 +1,16 @@
 const SRCareer = (() => {
   const qs = sel => document.querySelector(sel);
+  const showLinkNote = (html = '', tone = 'info') => {
+    const node = qs('[data-sr-link-note]');
+    if (!node) return;
+    if (!html) {
+      node.className = 'alert d-none';
+      node.innerHTML = '';
+      return;
+    }
+    node.className = `alert alert-${tone}`;
+    node.innerHTML = html;
+  };
   const authEntryUrl = () => {
     const host = window.location.hostname;
     if (host.endsWith('gridai.loc')) return 'https://auth.gridai.loc/career';
@@ -62,6 +73,7 @@ const SRCareer = (() => {
   async function startLinkedProvider(item) {
     const provider = String(item.provider || '').toLowerCase();
     if (item.mode === 'oauth') {
+      showLinkNote('');
       const res = await fetch(`/api/v1/me/oauth/${provider}/start`, {
         method: 'POST',
         credentials: 'include'
@@ -87,7 +99,16 @@ const SRCareer = (() => {
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok || !payload.requestId || !payload.botUrl) return;
-    window.open(payload.botUrl, '_blank', 'noopener,noreferrer');
+    const providerName = providerLabel(provider);
+    const opened = window.open(payload.botUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      window.location.href = payload.botUrl;
+      return;
+    }
+    const fallbackCommand = payload.command
+      ? `Если deeplink не сработал, отправь в ${providerName}: <code>${payload.command}</code>`
+      : '';
+    showLinkNote(`Открыли ${providerName}. Подтверди вход в боте. ${fallbackCommand}`.trim(), 'info');
     const poll = async () => {
       const statusRes = await fetch(`${statusUrl}?requestId=${encodeURIComponent(payload.requestId)}`, {
         credentials: 'include',
@@ -95,8 +116,12 @@ const SRCareer = (() => {
       });
       const statusPayload = await statusRes.json().catch(() => ({}));
       if (statusPayload.status === 'authorized') {
+        showLinkNote('');
         window.location.reload();
         return true;
+      }
+      if (statusPayload.status === 'expired') {
+        showLinkNote(`Не удалось подтвердить вход через ${providerName}. Попробуй ещё раз.`, 'warning');
       }
       return statusPayload.status !== 'pending';
     };

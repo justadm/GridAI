@@ -1,5 +1,16 @@
 const SRPortal = (() => {
   const qs = sel => document.querySelector(sel);
+  const showLinkNote = (html = '', tone = 'info') => {
+    const node = qs('[data-sr-link-note]');
+    if (!node) return;
+    if (!html) {
+      node.className = 'alert d-none';
+      node.innerHTML = '';
+      return;
+    }
+    node.className = `alert alert-${tone}`;
+    node.innerHTML = html;
+  };
   const authLoginUrl = () => (
     window.location.hostname.endsWith('gridai.loc')
       ? 'https://auth.gridai.loc/hiring'
@@ -264,6 +275,7 @@ const SRPortal = (() => {
   const startLinkedProvider = async item => {
     const provider = String(item.provider || '').toLowerCase();
     if (item.mode === 'oauth') {
+      showLinkNote('');
       const res = await fetch(`/api/v1/me/oauth/${provider}/start`, {
         method: 'POST',
         credentials: 'include'
@@ -289,7 +301,16 @@ const SRPortal = (() => {
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok || !payload.requestId || !payload.botUrl) return;
-    window.open(payload.botUrl, '_blank', 'noopener,noreferrer');
+    const providerName = providerLabel(provider);
+    const opened = window.open(payload.botUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      window.location.href = payload.botUrl;
+      return;
+    }
+    const fallbackCommand = payload.command
+      ? `Если deeplink не сработал, отправь в ${providerName}: <code>${payload.command}</code>`
+      : '';
+    showLinkNote(`Открыли ${providerName}. Подтверди вход в боте. ${fallbackCommand}`.trim(), 'info');
     let attempts = 0;
     const timer = window.setInterval(async () => {
       attempts += 1;
@@ -301,7 +322,10 @@ const SRPortal = (() => {
       if (statusPayload.status === 'authorized' || attempts >= 60 || statusPayload.status === 'expired') {
         window.clearInterval(timer);
         if (statusPayload.status === 'authorized') {
+          showLinkNote('');
           window.location.reload();
+        } else if (statusPayload.status === 'expired') {
+          showLinkNote(`Не удалось подтвердить вход через ${providerName}. Попробуй ещё раз.`, 'warning');
         }
       }
     }, 2000);
