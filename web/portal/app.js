@@ -32,6 +32,14 @@ const SRPortal = (() => {
     return window.SR_API_BASE || localStorage.getItem('sr-api-base') || defaultBase;
   };
 
+  const providerLabel = provider => ({
+    telegram: 'Telegram',
+    max: 'MAX',
+    google: 'Google',
+    yandex: 'Yandex ID',
+    vk: 'VK ID'
+  }[String(provider || '').toLowerCase()] || String(provider || ''));
+
   const loadJson = async page => {
     try {
       const base = getBase();
@@ -50,6 +58,21 @@ const SRPortal = (() => {
       return await res.json();
     } catch (error) {
       return { __error: String(error?.message || 'UNKNOWN') };
+    }
+  };
+
+  const loadLinkedProviders = async () => {
+    try {
+      const res = await fetch('/api/v1/me/link/providers', {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      if (res.status === 401) throw new Error('UNAUTHORIZED');
+      if (!res.ok) return [];
+      const payload = await res.json();
+      return Array.isArray(payload.items) ? payload.items : [];
+    } catch (_) {
+      return [];
     }
   };
 
@@ -238,6 +261,76 @@ const SRPortal = (() => {
     }
   };
 
+  const startLinkedProvider = async item => {
+    const provider = String(item.provider || '').toLowerCase();
+    if (item.mode === 'oauth') {
+      const res = await fetch(`/api/v1/me/oauth/${provider}/start`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok && payload.authorizeUrl) {
+        window.location.href = payload.authorizeUrl;
+      }
+      return;
+    }
+
+    const startUrl = item.mode === 'telegram_web_login'
+      ? '/api/v1/me/telegram/link/start'
+      : '/api/v1/me/max/link/start';
+    const statusUrl = item.mode === 'telegram_web_login'
+      ? '/api/v1/me/telegram/link/status'
+      : '/api/v1/me/max/link/status';
+    const res = await fetch(startUrl, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ intent: 'hiring' })
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload.requestId || !payload.botUrl) return;
+    window.open(payload.botUrl, '_blank', 'noopener,noreferrer');
+    let attempts = 0;
+    const timer = window.setInterval(async () => {
+      attempts += 1;
+      const statusRes = await fetch(`${statusUrl}?requestId=${encodeURIComponent(payload.requestId)}`, {
+        credentials: 'include',
+        cache: 'no-store'
+      });
+      const statusPayload = await statusRes.json().catch(() => ({}));
+      if (statusPayload.status === 'authorized' || attempts >= 60 || statusPayload.status === 'expired') {
+        window.clearInterval(timer);
+        if (statusPayload.status === 'authorized') {
+          window.location.reload();
+        }
+      }
+    }, 2000);
+  };
+
+  const renderLinkedProviders = items => {
+    const node = qs('#sr-linked-accounts');
+    if (!node) return;
+    node.innerHTML = items.map(item => `
+      <div class="d-flex justify-content-between align-items-center gap-3 border rounded px-3 py-2 mb-2">
+        <div>
+          <strong>${providerLabel(item.provider)}</strong>
+          <div class="sr-muted small">${item.linked ? 'Подключен к текущему аккаунту' : 'Не подключен'}</div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          ${item.linked ? '<span class="badge text-bg-success">Подключен</span>' : ''}
+          ${item.enabled && !item.linked ? `<button class="btn btn-outline-secondary btn-sm" data-link-provider="${item.provider}">Подключить</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    node.querySelectorAll('[data-link-provider]').forEach(button => {
+      button.addEventListener('click', () => {
+        const provider = String(button.getAttribute('data-link-provider') || '').toLowerCase();
+        const found = items.find(entry => String(entry.provider || '').toLowerCase() === provider);
+        if (found) startLinkedProvider(found).catch(() => {});
+      });
+    });
+  };
+
   const renderers = {
     dashboard: renderDashboard,
     reports: renderReports,
@@ -253,7 +346,10 @@ const SRPortal = (() => {
     const page = document.body.dataset.page;
     if (!page || !renderers[page]) return;
     showState('loading');
-    const data = await loadJson(page);
+    const [data, linkedProviders] = await Promise.all([
+      loadJson(page),
+      page === 'settings' ? loadLinkedProviders() : Promise.resolve([])
+    ]);
     if (!data || data.__error) {
       showState('error');
       const error = qs('[data-sr-error]');
@@ -266,6 +362,7 @@ const SRPortal = (() => {
     }
     showState('ready');
     renderers[page](data);
+    if (page === 'settings') renderLinkedProviders(linkedProviders);
   };
 
   return { init };

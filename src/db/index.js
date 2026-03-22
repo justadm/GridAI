@@ -424,6 +424,14 @@ function getWebUserBySocialAccount(provider, externalUserId) {
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(account.user_id);
 }
 
+function deleteSocialAuthAccountForUserProvider(userId, provider) {
+  const db = getDb();
+  db.prepare(`
+    DELETE FROM social_auth_accounts
+    WHERE user_id = ? AND provider = ?
+  `).run(String(userId || ''), String(provider || '').toLowerCase());
+}
+
 function getBotUserByTelegramId(tgId) {
   const db = getDb();
   return db.prepare('SELECT * FROM users WHERE tg_id = ?').get(String(tgId || ''));
@@ -451,6 +459,38 @@ function upsertSocialAuthAccount(userId, provider, externalUserId, payload = {})
     now
   );
   return getSocialAuthAccount(provider, externalUserId);
+}
+
+function linkSocialAuthAccountToUser(userId, provider, externalUserId, payload = {}, options = {}) {
+  const normalizedUserId = String(userId || '').trim();
+  const normalizedProvider = String(provider || '').toLowerCase().trim();
+  const normalizedExternalUserId = String(externalUserId || '').trim();
+  if (!normalizedUserId || !normalizedProvider || !normalizedExternalUserId) {
+    throw new Error('invalid_social_account');
+  }
+
+  const db = getDb();
+  const existingByExternal = getSocialAuthAccount(normalizedProvider, normalizedExternalUserId);
+  const existingForUser = db.prepare(`
+    SELECT *
+    FROM social_auth_accounts
+    WHERE user_id = ? AND provider = ?
+  `).get(normalizedUserId, normalizedProvider);
+
+  if (existingByExternal && existingByExternal.user_id !== normalizedUserId && !options.allowReassign) {
+    throw new Error('social_account_already_linked');
+  }
+
+  if (existingForUser && existingForUser.external_user_id !== normalizedExternalUserId) {
+    db.prepare('DELETE FROM social_auth_accounts WHERE id = ?').run(existingForUser.id);
+  }
+
+  if (existingByExternal && existingByExternal.user_id !== normalizedUserId && options.allowReassign) {
+    db.prepare('UPDATE social_auth_accounts SET user_id = ?, updated_at = ? WHERE id = ?')
+      .run(normalizedUserId, new Date().toISOString(), existingByExternal.id);
+  }
+
+  return upsertSocialAuthAccount(normalizedUserId, normalizedProvider, normalizedExternalUserId, payload);
 }
 
 function canAutoCreateSocialUser(provider) {
@@ -1096,7 +1136,9 @@ module.exports = {
   getSocialAuthAccount,
   getWebUserBySocialAccount,
   getBotUserByTelegramId,
+  deleteSocialAuthAccountForUserProvider,
   upsertSocialAuthAccount,
+  linkSocialAuthAccountToUser,
   createSocialAuthUser,
   elevateWebUserRole,
   listReports,

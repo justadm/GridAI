@@ -39,7 +39,9 @@ const {
   listQueriesByUserId,
   listSocialAuthAccountsByUserId,
   listUserJobDigestSubscriptions,
+  deleteSocialAuthAccountForUserProvider,
   upsertSocialAuthAccount,
+  linkSocialAuthAccountToUser,
   createSocialAuthUser,
   elevateWebUserRole,
   listReports,
@@ -75,6 +77,7 @@ const DATA_DIR = path.join(__dirname, '../../web/data');
 const STATIC_DIR = path.join(__dirname, '../../web');
 const hhOauthState = new Map();
 const socialOauthState = new Map();
+const socialOauthLinkState = new Map();
 const AUTH_COOKIE_NAME = 'sr_session';
 const COOKIE_DOMAIN = String(process.env.COOKIE_DOMAIN || '').trim();
 const AUTH_RATE_LIMIT_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 60 * 1000);
@@ -526,6 +529,13 @@ function authLoginUrl(query = '', intent = 'career') {
   return `${AUTH_URL}${authEntryPath(intent)}${query || ''}`;
 }
 
+function buildLinkedAccountsUrl(intent = 'career', provider = '') {
+  const normalizedIntent = normalizeIntent(intent);
+  const hash = normalizedIntent === 'hiring' ? '#linked-accounts' : '#profile';
+  const marker = provider ? `?linked=${encodeURIComponent(String(provider || '').toLowerCase())}` : '';
+  return buildAppUrl(normalizedIntent, `${getAppHomePath(normalizedIntent)}${marker}${hash}`);
+}
+
 function getTelegramBotUsernameForIntent(intent = 'career') {
   if (normalizeIntent(intent) === 'hiring') {
     return String(process.env.TELEGRAM_BOT_USERNAME_HR || process.env.TELEGRAM_BOT_USERNAME || 'GridAI_Recruiter_bot')
@@ -663,6 +673,45 @@ function resolveSocialUser(provider, profile, intent = 'career') {
   }
 
   return { user: null, reason: email ? 'invite_required' : 'email_missing' };
+}
+
+function getLinkedAuthProvidersForUser(userId, intent = 'career') {
+  const normalizedIntent = normalizeIntent(intent);
+  const linked = new Map(
+    listSocialAuthAccountsByUserId(userId)
+      .map(item => [String(item.provider || '').toLowerCase(), item])
+  );
+  const oauthItems = getProviderList().map(item => {
+    const provider = String(item.provider || '').toLowerCase();
+    const current = linked.get(provider);
+    return {
+      provider,
+      mode: 'oauth',
+      enabled: Boolean(item.enabled),
+      linked: Boolean(current),
+      externalUserId: current?.external_user_id || null,
+      email: current?.email || null
+    };
+  });
+  const customItems = [
+    {
+      provider: 'telegram',
+      mode: 'telegram_web_login',
+      enabled: Boolean(getTelegramBotUsernameForIntent(normalizedIntent)),
+      linked: linked.has('telegram'),
+      externalUserId: linked.get('telegram')?.external_user_id || null,
+      email: linked.get('telegram')?.email || null
+    },
+    {
+      provider: 'max',
+      mode: 'max_web_login',
+      enabled: Boolean(resolveMaxBotLaunch('preview', normalizedIntent).botUrl),
+      linked: linked.has('max'),
+      externalUserId: linked.get('max')?.external_user_id || null,
+      email: linked.get('max')?.email || null
+    }
+  ];
+  return [...customItems, ...oauthItems];
 }
 
 const roleRank = { viewer: 0, analyst: 1, admin: 2, owner: 3 };
@@ -926,6 +975,43 @@ function buildApiRouter() {
     res.json({ items: [...customItems, ...oauthItems] });
   });
 
+  app.get(`${API_BASE}/me/link/providers`, requireAuth, (req, res) => {
+    const intent = getIntentFromRequest(req);
+    res.json({ items: getLinkedAuthProvidersForUser(req.user.id, intent) });
+  });
+
+  app.get(`${API_BASE}/me/oauth/accounts`, requireAuth, (req, res) => {
+    res.json({ items: listSocialAuthAccountsByUserId(req.user.id) });
+  });
+
+  app.post(`${API_BASE}/me/oauth/:provider/start`, requireAuth, (req, res) => {
+    const provider = String(req.params.provider || '').toLowerCase();
+    const intent = getIntentFromRequest(req);
+    const cfg = getProviderConfig(provider);
+    if (!cfg) {
+      return res.status(404).json({ error: { code: 'UNKNOWN_PROVIDER', message: 'Unsupported OAuth provider' } });
+    }
+    if (!cfg.enabled) {
+      return res.status(400).json({ error: { code: 'OAUTH_NOT_CONFIGURED', message: `Provider ${provider} is not configured` } });
+    }
+    const state = randomUUID();
+    const { verifier, challenge } = createPkcePair();
+    socialOauthLinkState.set(state, {
+      provider,
+      verifier,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      intent,
+      userId: req.user.id
+    });
+    const authorizeUrl = buildAuthorizeUrl(cfg, state, challenge);
+    res.json({ provider, authorizeUrl });
+  });
+
+  app.delete(`${API_BASE}/me/oauth/:provider`, requireAuth, (req, res) => {
+    deleteSocialAuthAccountForUserProvider(req.user.id, req.params.provider);
+    res.json({ ok: true });
+  });
+
   app.get(`${API_BASE}/auth/oauth/:provider/start`, (req, res) => {
     const provider = String(req.params.provider || '').toLowerCase();
     const intent = getIntentFromRequest(req);
@@ -964,8 +1050,11 @@ function buildApiRouter() {
     if (providerError) {
       return res.redirect(authLoginUrl(`?oauth_error=${encodeURIComponent(providerError)}`, getIntentFromRequest(req)));
     }
-    const stateRow = socialOauthState.get(state);
+    const loginState = socialOauthState.get(state);
+    const linkState = socialOauthLinkState.get(state);
     socialOauthState.delete(state);
+    socialOauthLinkState.delete(state);
+    const stateRow = linkState || loginState;
     if (!code || !stateRow || stateRow.provider !== provider || stateRow.expiresAt < Date.now()) {
       return res.redirect(authLoginUrl('?oauth_error=invalid_state', getIntentFromRequest(req)));
     }
@@ -975,6 +1064,13 @@ function buildApiRouter() {
         deviceId: req.query.device_id
       });
       const profile = await fetchUserProfile(cfg, tokenPayload.access_token);
+      if (linkState) {
+        const linked = linkSocialAuthAccountToUser(linkState.userId, provider, profile.externalUserId, {
+          email: profile?.email || null,
+          profile: profile?.raw || profile || {}
+        }, { allowReassign: true });
+        return res.redirect(buildLinkedAccountsUrl(linkState.intent, linked.provider));
+      }
       const resolved = resolveSocialUser(provider, profile, stateRow.intent);
       const user = resolved.user;
       if (!user) {
@@ -991,6 +1087,21 @@ function buildApiRouter() {
   app.post(`${API_BASE}/auth/telegram/web-login/start`, (req, res) => {
     const intent = getIntentFromRequest(req);
     const { requestId, expiresIn } = createWebLoginRequest('telegram', 180, { intent });
+    res.json({
+      requestId,
+      botUrl: `https://t.me/${getTelegramBotUsernameForIntent(intent)}?start=login_${requestId}`,
+      intent,
+      expiresIn
+    });
+  });
+
+  app.post(`${API_BASE}/me/telegram/link/start`, requireAuth, (req, res) => {
+    const intent = getIntentFromRequest(req);
+    const { requestId, expiresIn } = createWebLoginRequest('telegram', 180, {
+      intent,
+      mode: 'link',
+      userId: req.user.id
+    });
     res.json({
       requestId,
       botUrl: `https://t.me/${getTelegramBotUsernameForIntent(intent)}?start=login_${requestId}`,
@@ -1027,6 +1138,32 @@ function buildApiRouter() {
     return res.json({ status: 'authorized', user: resolved.user, redirectUrl: buildAppUrl(intent), intent });
   });
 
+  app.get(`${API_BASE}/me/telegram/link/status`, requireAuth, (req, res) => {
+    const requestId = String(req.query.requestId || '').trim();
+    const state = getWebLoginRequestStatus('telegram', requestId);
+    if (state.status === 'pending') {
+      return res.json({ status: 'pending', expiresIn: state.expiresIn || 0 });
+    }
+    if (state.status !== 'authorized' || !state.profile) {
+      return res.json({ status: 'expired' });
+    }
+    const externalUserId = String(state.profile.id || '').trim();
+    if (!externalUserId) {
+      consumeWebLoginRequest('telegram', requestId);
+      return res.json({ status: 'error', error: 'external_id_missing' });
+    }
+    const linked = linkSocialAuthAccountToUser(req.user.id, 'telegram', externalUserId, {
+      email: null,
+      profile: state.profile
+    }, { allowReassign: true });
+    consumeWebLoginRequest('telegram', requestId);
+    return res.json({
+      status: 'authorized',
+      linked,
+      redirectUrl: buildLinkedAccountsUrl(state.context?.intent || 'career', 'telegram')
+    });
+  });
+
   app.post(`${API_BASE}/auth/telegram/web-login/complete`, (req, res) => {
     const requiredSecret = String(process.env.AUTH_WEB_LOGIN_SECRET || '').trim();
     const providedSecret = String(req.headers['x-auth-web-login-secret'] || '').trim();
@@ -1042,6 +1179,17 @@ function buildApiRouter() {
   app.post(`${API_BASE}/auth/max/web-login/start`, (req, res) => {
     const intent = getIntentFromRequest(req);
     const { requestId, expiresIn } = createWebLoginRequest('max', 180, { intent });
+    const launch = resolveMaxBotLaunch(requestId, intent);
+    res.json({ requestId, expiresIn, intent, ...launch });
+  });
+
+  app.post(`${API_BASE}/me/max/link/start`, requireAuth, (req, res) => {
+    const intent = getIntentFromRequest(req);
+    const { requestId, expiresIn } = createWebLoginRequest('max', 180, {
+      intent,
+      mode: 'link',
+      userId: req.user.id
+    });
     const launch = resolveMaxBotLaunch(requestId, intent);
     res.json({ requestId, expiresIn, intent, ...launch });
   });
@@ -1078,6 +1226,32 @@ function buildApiRouter() {
     setSessionCookie(res, session.token, session.expiresAt);
     consumeWebLoginRequest('max', requestId);
     return res.json({ status: 'authorized', user: resolved.user, redirectUrl: buildAppUrl(intent), intent });
+  });
+
+  app.get(`${API_BASE}/me/max/link/status`, requireAuth, (req, res) => {
+    const requestId = String(req.query.requestId || '').trim();
+    const state = getWebLoginRequestStatus('max', requestId);
+    if (state.status === 'pending') {
+      return res.json({ status: 'pending', expiresIn: state.expiresIn || 0 });
+    }
+    if (state.status !== 'authorized' || !state.profile) {
+      return res.json({ status: 'expired' });
+    }
+    const externalUserId = String(state.profile.id || '').trim();
+    if (!externalUserId) {
+      consumeWebLoginRequest('max', requestId);
+      return res.json({ status: 'error', error: 'external_id_missing' });
+    }
+    const linked = linkSocialAuthAccountToUser(req.user.id, 'max', externalUserId, {
+      email: String(state.profile.email || state.profile.mail || '').trim().toLowerCase() || null,
+      profile: state.profile
+    }, { allowReassign: true });
+    consumeWebLoginRequest('max', requestId);
+    return res.json({
+      status: 'authorized',
+      linked,
+      redirectUrl: buildLinkedAccountsUrl(state.context?.intent || 'career', 'max')
+    });
   });
 
   app.post(`${API_BASE}/auth/max/web-login/complete`, (req, res) => {
