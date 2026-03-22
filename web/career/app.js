@@ -1,10 +1,11 @@
 const SRCareer = (() => {
   const qs = sel => document.querySelector(sel);
-  const authEntryUrl = () => (
-    window.location.hostname.endsWith('gridai.ru')
-      ? 'https://auth.gridai.ru/career'
-      : '/career'
-  );
+  const authEntryUrl = () => {
+    const host = window.location.hostname;
+    if (host.endsWith('gridai.loc')) return 'https://auth.gridai.loc/career';
+    if (host.endsWith('gridai.ru')) return 'https://auth.gridai.ru/career';
+    return '/career';
+  };
 
   async function ensureSession() {
     const loading = qs('[data-sr-loading]');
@@ -29,7 +30,10 @@ const SRCareer = (() => {
   }
 
   async function loadData() {
-    const res = await fetch('../data/career-dashboard.json', { cache: 'no-store' });
+    const res = await fetch('/api/v1/career/dashboard', {
+      cache: 'no-store',
+      credentials: 'include'
+    });
     if (!res.ok) return null;
     return res.json();
   }
@@ -87,11 +91,24 @@ const SRCareer = (() => {
     qs('#sr-career-salary').textContent = profile.salary;
   }
 
+  function renderDataHint(data) {
+    const note = qs('[data-sr-career-note]');
+    if (!note) return;
+    if (data?.requiresTelegram) {
+      note.classList.remove('d-none');
+      note.innerHTML = 'Подключи <strong>Telegram Careers bot</strong>, чтобы кабинет показывал твои реальные дайджесты, запросы и отправленные вакансии.';
+      return;
+    }
+    note.classList.add('d-none');
+    note.innerHTML = '';
+  }
+
   async function init() {
     const authed = await ensureSession();
     if (!authed) return;
     const data = await loadData();
     if (!data) return;
+    renderDataHint(data);
     renderOverview(data);
     renderDigests(data.digests || []);
     renderSaved(data.saved || []);

@@ -21,6 +21,10 @@ const {
   consumeWebLoginRequest
 } = require('../auth/web-login');
 const { getAreas, getProfessionalRoles, suggestSkills } = require('../hh/client');
+const { searchVacancies } = require('../hh/client');
+const { criteriaToSearchParams } = require('../hh/mappers');
+const { computeMarketStats } = require('../market/market');
+const { parseCriteria } = require('../llm/openai');
 const {
   createAuthToken,
   consumeAuthToken,
@@ -29,7 +33,12 @@ const {
   getWebUserForLogin,
   createBootstrapOwnerIfAllowed,
   getSessionUser,
+  getBotUserByTelegramId,
   getWebUserBySocialAccount,
+  listDeliveredVacanciesForSubscriptions,
+  listQueriesByUserId,
+  listSocialAuthAccountsByUserId,
+  listUserJobDigestSubscriptions,
   upsertSocialAuthAccount,
   createSocialAuthUser,
   elevateWebUserRole,
@@ -551,8 +560,13 @@ function getRequestHost(req) {
   return String(req.headers.host || '').toLowerCase().split(':')[0];
 }
 
+function isRootHost(host) {
+  return ['gridai.ru', 'www.gridai.ru', 'gridai.loc', 'www.gridai.loc'].includes(String(host || '').toLowerCase());
+}
+
 function isSubdomainHost(host, subdomain) {
-  return host === `${subdomain}.gridai.ru`;
+  const normalizedHost = String(host || '').toLowerCase();
+  return normalizedHost === `${subdomain}.gridai.ru` || normalizedHost === `${subdomain}.gridai.loc`;
 }
 
 function portalUrl(pathname = '') {
@@ -662,6 +676,209 @@ function requireRole(minRole) {
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } });
     }
     next();
+  };
+}
+
+function formatRelativeRu(iso) {
+  const ts = Date.parse(String(iso || ''));
+  if (!Number.isFinite(ts)) return '—';
+  const diffMs = Date.now() - ts;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < hour) {
+    const mins = Math.max(1, Math.round(diffMs / minute));
+    return `${mins} мин назад`;
+  }
+  if (diffMs < day) {
+    const hours = Math.max(1, Math.round(diffMs / hour));
+    return `${hours} ч назад`;
+  }
+  const days = Math.max(1, Math.round(diffMs / day));
+  if (days === 1) return 'вчера';
+  return `${days} дн назад`;
+}
+
+function formatSentAtRu(iso) {
+  const ts = Date.parse(String(iso || ''));
+  if (!Number.isFinite(ts)) return '—';
+  const dt = new Date(ts);
+  const now = new Date();
+  const sameDay = dt.toDateString() === now.toDateString();
+  const yDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yesterday = dt.toDateString() === yDay.toDateString();
+  const time = dt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return `сегодня в ${time}`;
+  if (yesterday) return `вчера в ${time}`;
+  return dt.toLocaleString('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatVacancySalary(vacancy) {
+  const salary = vacancy?.salary;
+  if (!salary) return 'з/п не указана';
+  const from = salary.from ? `от ${salary.from}` : '';
+  const to = salary.to ? `до ${salary.to}` : '';
+  const body = [from, to].filter(Boolean).join(' ');
+  return `${body || 'з/п'} ${salary.currency || ''}`.trim();
+}
+
+function formatWorkMode(vacancy) {
+  const schedule = String(vacancy?.schedule?.id || '').toLowerCase();
+  const employment = String(vacancy?.employment?.id || '').toLowerCase();
+  if (schedule.includes('remote')) return 'remote';
+  if (schedule.includes('flex') || schedule.includes('hybrid')) return 'hybrid';
+  if (employment.includes('part')) return 'part-time';
+  if (employment.includes('project')) return 'project';
+  return 'office';
+}
+
+function inferProfileFromSubscriptions(subscriptions = []) {
+  const firstActive = subscriptions.find(item => Number(item.active) === 1) || subscriptions[0];
+  if (!firstActive) {
+    return {
+      role: 'Не задано',
+      format: 'Не задано',
+      salary: 'Не задано'
+    };
+  }
+  let criteria = null;
+  try {
+    criteria = firstActive.criteria_json ? JSON.parse(firstActive.criteria_json) : null;
+  } catch {
+    criteria = null;
+  }
+  const keywords = Array.isArray(criteria?.keywords) ? criteria.keywords : [];
+  const format = keywords.includes('удаленка')
+    ? 'Удалёнка'
+    : keywords.includes('гибрид')
+      ? 'Гибрид'
+      : 'Не задано';
+  const amount = Number(criteria?.salary?.amount || 0);
+  return {
+    role: String(criteria?.role || firstActive.raw_query || 'Не задано'),
+    format,
+    salary: amount > 0 ? `от ${amount}` : 'Не указано'
+  };
+}
+
+async function buildCareerDashboardPayload(webUser) {
+  const fallback = readMock('career-dashboard');
+  const accounts = listSocialAuthAccountsByUserId(webUser.id);
+  const telegramIds = [...new Set(
+    accounts
+      .filter(item => String(item.provider || '').toLowerCase() === 'telegram')
+      .map(item => String(item.external_user_id || '').trim())
+      .filter(Boolean)
+  )];
+
+  const botUsers = telegramIds
+    .map(getBotUserByTelegramId)
+    .filter(Boolean);
+
+  if (!botUsers.length) {
+    return {
+      ...fallback,
+      source: 'fallback',
+      requiresTelegram: true
+    };
+  }
+
+  const digestSubscriptions = botUsers.flatMap(botUser => listUserJobDigestSubscriptions(botUser.id));
+  const activeSubscriptions = digestSubscriptions.filter(item => Number(item.active) === 1);
+  const queries = botUsers.flatMap(botUser => listQueriesByUserId(botUser.id, 10));
+  const delivered = listDeliveredVacanciesForSubscriptions(activeSubscriptions.map(item => item.id), 12);
+
+  const latestSubscription = activeSubscriptions[0] || digestSubscriptions[0] || null;
+  let marketStats = null;
+  let marketRole = '';
+  if (latestSubscription) {
+    try {
+      const criteria = latestSubscription.criteria_json
+        ? JSON.parse(latestSubscription.criteria_json)
+        : await parseCriteria(latestSubscription.raw_query || '');
+      const params = criteriaToSearchParams(criteria);
+      const page = await searchVacancies(params, 0, 30);
+      const vacancies = Array.isArray(page?.items) ? page.items : [];
+      if (vacancies.length) {
+        marketStats = computeMarketStats(vacancies, page?.found || vacancies.length);
+        marketRole = String(criteria?.role || latestSubscription.raw_query || '').trim();
+      }
+    } catch (_) {
+      marketStats = null;
+    }
+  }
+
+  const overview = {
+    digests: String(activeSubscriptions.length),
+    saved: String(delivered.length),
+    marketPulse: marketStats && marketRole
+      ? `${marketRole} ${(marketStats.trend_7d?.delta_percent || 0) >= 0 ? '+' : ''}${marketStats.trend_7d?.delta_percent || 0}%`
+      : (fallback.overview?.marketPulse || 'Рынок без изменений')
+  };
+
+  const digests = activeSubscriptions.length
+    ? activeSubscriptions.map(item => ({
+      id: item.id,
+      query: item.raw_query,
+      lastSent: formatSentAtRu(item.last_success_at || item.last_run_at),
+      status: Number(item.active) === 1 ? 'active' : 'paused',
+      statusLabel: Number(item.active) === 1 ? 'Активен' : 'Отключен'
+    }))
+    : (fallback.digests || []);
+
+  const saved = delivered.length
+    ? delivered
+      .filter(item => item.vacancy)
+      .slice(0, 6)
+      .map(item => ({
+        id: item.vacancy_id,
+        title: item.vacancy.name || 'Без названия',
+        company: item.vacancy.employer?.name || 'Компания не указана',
+        salary: formatVacancySalary(item.vacancy),
+        mode: formatWorkMode(item.vacancy),
+        sentAt: item.sent_at,
+        url: item.vacancy.alternate_url || ''
+      }))
+    : (fallback.saved || []);
+
+  const queriesView = queries.length
+    ? queries
+      .slice(0, 6)
+      .map(item => ({
+        id: item.id,
+        query: item.raw_text,
+        market: item.filters?.text || item.filters?.query || 'Поиск в HH',
+        updatedAt: formatRelativeRu(item.created_at)
+      }))
+    : (fallback.queries || []);
+
+  const market = marketStats
+    ? [
+      `Топ-навыки: ${marketStats.top_skills.slice(0, 5).map(item => item.skill).join(', ') || '—'}`,
+      `Удалёнка в выборке: ${marketStats.remote_share}%`,
+      marketStats.salary_from_avg && marketStats.salary_to_avg
+        ? `Средняя вилка: ${marketStats.salary_from_avg}–${marketStats.salary_to_avg}`
+        : 'Средняя вилка: —'
+    ]
+    : (fallback.market || []);
+
+  const profile = inferProfileFromSubscriptions(activeSubscriptions);
+
+  return {
+    source: 'live',
+    requiresTelegram: false,
+    overview,
+    digests,
+    saved,
+    queries: queriesView,
+    market,
+    profile
   };
 }
 
@@ -978,6 +1195,20 @@ function buildApiRouter() {
 
   app.get(`${API_BASE}/me`, requireAuth, (req, res) => {
     res.json({ user: req.user });
+  });
+
+  app.get(`${API_BASE}/career/dashboard`, requireAuth, async (req, res) => {
+    try {
+      const payload = await buildCareerDashboardPayload(req.user);
+      res.json(payload);
+    } catch (err) {
+      res.status(500).json({
+        error: {
+          code: 'CAREER_DASHBOARD_FAILED',
+          message: String(err?.message || 'Failed to build career dashboard')
+        }
+      });
+    }
   });
 
   app.get(`${API_BASE}/hh/status`, requireAuth, requireRole('admin'), (req, res) => {
@@ -1435,10 +1666,10 @@ function startWebServer() {
     if (isSubdomainHost(host, 'admin') && (req.path === '/' || req.path === '/index.html')) {
       return res.redirect('/hiring/settings.html');
     }
-    if ((host === 'gridai.ru' || host === 'www.gridai.ru') && req.path.startsWith('/portal')) {
+    if (isRootHost(host) && req.path.startsWith('/portal')) {
       return res.redirect(`${HIRING_URL}${req.originalUrl.replace(/^\/portal/, '/hiring')}`);
     }
-    if ((host === 'gridai.ru' || host === 'www.gridai.ru') && (req.path === '/login' || req.path === '/sign-in' || req.path === '/signin' || req.path === '/career' || req.path === '/hiring' || req.path.startsWith('/oauth/'))) {
+    if (isRootHost(host) && (req.path === '/login' || req.path === '/sign-in' || req.path === '/signin' || req.path === '/career' || req.path === '/hiring' || req.path.startsWith('/oauth/'))) {
       return res.redirect(`${AUTH_URL}${req.originalUrl}`);
     }
     next();

@@ -243,6 +243,20 @@ function listRecentQueries(limit = 10) {
   return db.prepare('SELECT q.id, q.user_id, q.type, q.raw_text, q.created_at, u.tg_id FROM queries q JOIN users u ON u.id = q.user_id ORDER BY q.id DESC LIMIT ?').all(limit);
 }
 
+function listQueriesByUserId(userId, limit = 20) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT id, user_id, type, raw_text, filters_json, created_at
+    FROM queries
+    WHERE user_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(userId, limit).map(row => ({
+    ...row,
+    filters: row.filters_json ? JSON.parse(row.filters_json) : null
+  }));
+}
+
 function setUserMode(userId, mode) {
   const db = getDb();
   db.prepare('UPDATE users SET mode = ? WHERE id = ?').run(mode, userId);
@@ -385,6 +399,16 @@ function getWebUserById(userId) {
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(userId);
 }
 
+function listSocialAuthAccountsByUserId(userId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT *
+    FROM social_auth_accounts
+    WHERE user_id = ?
+    ORDER BY updated_at DESC, id DESC
+  `).all(String(userId || ''));
+}
+
 function getSocialAuthAccount(provider, externalUserId) {
   const db = getDb();
   return db.prepare(`
@@ -398,6 +422,11 @@ function getWebUserBySocialAccount(provider, externalUserId) {
   const account = getSocialAuthAccount(provider, externalUserId);
   if (!account) return null;
   return db.prepare('SELECT * FROM web_users WHERE id = ?').get(account.user_id);
+}
+
+function getBotUserByTelegramId(tgId) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM users WHERE tg_id = ?').get(String(tgId || ''));
 }
 
 function upsertSocialAuthAccount(userId, provider, externalUserId, payload = {}) {
@@ -995,6 +1024,31 @@ function saveJobDigestDeliveries(subscriptionId, vacancyIds, sentAt = new Date()
   tx(vacancyIds);
 }
 
+function listDeliveredVacanciesForSubscriptions(subscriptionIds, limit = 20) {
+  const ids = Array.isArray(subscriptionIds)
+    ? subscriptionIds.map(id => Number(id)).filter(Number.isFinite)
+    : [];
+  if (!ids.length) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = db.prepare(`
+    SELECT d.subscription_id, d.vacancy_id, d.sent_at, c.raw_json, c.fetched_at
+    FROM job_digest_deliveries d
+    LEFT JOIN vacancies_cache c ON c.vacancy_id = d.vacancy_id
+    WHERE d.subscription_id IN (${placeholders})
+    ORDER BY d.sent_at DESC, d.id DESC
+    LIMIT ?
+  `).all(...ids, Number(limit) || 20);
+
+  return rows.map(row => ({
+    subscription_id: row.subscription_id,
+    vacancy_id: String(row.vacancy_id),
+    sent_at: row.sent_at,
+    fetched_at: row.fetched_at,
+    vacancy: row.raw_json ? JSON.parse(row.raw_json) : null
+  }));
+}
+
 function markJobDigestSubscriptionRun(subscriptionId, payload = {}) {
   const db = getDb();
   const now = payload.ranAt || new Date().toISOString();
@@ -1025,6 +1079,7 @@ module.exports = {
   getLlmCache,
   saveLlmCache,
   listRecentQueries,
+  listQueriesByUserId,
   setUserMode,
   getUserMode,
   hasUserConsent,
@@ -1037,8 +1092,10 @@ module.exports = {
   getWebUserForLogin,
   createBootstrapOwnerIfAllowed,
   getWebUserById,
+  listSocialAuthAccountsByUserId,
   getSocialAuthAccount,
   getWebUserBySocialAccount,
+  getBotUserByTelegramId,
   upsertSocialAuthAccount,
   createSocialAuthUser,
   elevateWebUserRole,
@@ -1079,6 +1136,7 @@ module.exports = {
   updateUserJobDigestSubscription,
   deactivateUserJobDigestSubscription,
   listJobDigestDeliveryVacancyIds,
+  listDeliveredVacanciesForSubscriptions,
   saveJobDigestDeliveries,
   markJobDigestSubscriptionRun
 };

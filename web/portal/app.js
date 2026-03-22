@@ -1,9 +1,11 @@
 const SRPortal = (() => {
   const qs = sel => document.querySelector(sel);
   const authLoginUrl = () => (
-    window.location.hostname.endsWith('gridai.ru')
-      ? 'https://auth.gridai.ru/hiring'
-      : '/hiring'
+    window.location.hostname.endsWith('gridai.loc')
+      ? 'https://auth.gridai.loc/hiring'
+      : window.location.hostname.endsWith('gridai.ru')
+        ? 'https://auth.gridai.ru/hiring'
+        : '/hiring'
   );
 
   const badgeForStatus = status => {

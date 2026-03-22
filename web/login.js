@@ -19,8 +19,8 @@ function getIntent() {
   const queryIntent = String(params.get('intent') || '').toLowerCase();
   if (queryIntent === 'career' || queryIntent === 'hiring') return queryIntent;
   const host = window.location.hostname;
-  if (host === 'career.gridai.ru') return 'career';
-  if (host === 'hiring.gridai.ru') return 'hiring';
+  if (host === 'career.gridai.ru' || host === 'career.gridai.loc') return 'career';
+  if (host === 'hiring.gridai.ru' || host === 'hiring.gridai.loc') return 'hiring';
   const path = window.location.pathname.toLowerCase();
   if (path === '/hiring' || path.startsWith('/hiring/')) return 'hiring';
   return 'career';
@@ -34,14 +34,20 @@ function syncIntentInUrl(intent) {
 }
 
 function getAuthOrigin() {
-  return window.location.hostname === 'auth.gridai.ru'
-    ? 'https://auth.gridai.ru'
+  return window.location.hostname === 'auth.gridai.ru' || window.location.hostname === 'auth.gridai.loc'
+    ? window.location.origin
     : window.location.origin;
 }
 
 function getAppOrigin(intent = getIntent()) {
-  if (!window.location.hostname.endsWith('gridai.ru')) return window.location.origin;
-  return intent === 'hiring' ? 'https://hiring.gridai.ru' : 'https://career.gridai.ru';
+  const host = window.location.hostname;
+  if (host.endsWith('gridai.loc')) {
+    return intent === 'hiring' ? 'https://hiring.gridai.loc' : 'https://career.gridai.loc';
+  }
+  if (host.endsWith('gridai.ru')) {
+    return intent === 'hiring' ? 'https://hiring.gridai.ru' : 'https://career.gridai.ru';
+  }
+  return window.location.origin;
 }
 
 function getAppHome(intent = getIntent()) {
