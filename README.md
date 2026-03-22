@@ -4,7 +4,7 @@ GridAI — платформа с двумя сценариями:
 - `career` — подбор вакансий, дайджесты и сигналы рынка для кандидатов;
 - `hiring` — аналитика ролей, конкурентов и hiring-процессов для рекрутеров.
 
-Подробная документация и прежний развёрнутый README перенесены в [`README_FULL.md`](/Users/just/projects/GridAI/README_FULL.md).
+Подробная документация и прежний развёрнутый README перенесены в [`docs/README_FULL.md`](/Users/just/projects/GridAI/docs/README_FULL.md).
 
 ## Установка
 
