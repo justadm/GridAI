@@ -439,7 +439,15 @@ function createSocialAuthUser(provider, externalUserId, payload = {}) {
   const orgId = ensureDefaultOrg();
   const id = require('crypto').randomUUID();
   const normalizedEmail = String(payload.email || '').trim().toLowerCase();
-  const syntheticEmail = `${normalizedProvider}+${String(externalUserId || '').replace(/[^a-zA-Z0-9._-]/g, '_')}@auth.gridai.local`;
+  const authHost = (() => {
+    try {
+      const raw = String(process.env.AUTH_URL || 'https://auth.gridai.ru').trim();
+      return new URL(raw).host || 'auth.gridai.ru';
+    } catch {
+      return 'auth.gridai.ru';
+    }
+  })();
+  const syntheticEmail = `${normalizedProvider}+${String(externalUserId || '').replace(/[^a-zA-Z0-9._-]/g, '_')}@${authHost}`;
   const email = normalizedEmail || syntheticEmail;
   const name = String(
     payload.name

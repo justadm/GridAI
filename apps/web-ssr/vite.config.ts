@@ -11,7 +11,7 @@ export default defineConfig({
     ]
   },
   server: {
-    allowedHosts: ['sbdb.loc', 'localhost', '127.0.0.1']
+    allowedHosts: ['gridai.loc', 'auth.gridai.loc', 'career.gridai.loc', 'hiring.gridai.loc', 'admin.gridai.loc', 'api.gridai.loc', 'localhost', '127.0.0.1']
   },
   build: {
     outDir: path.resolve(__dirname, '../../dist/client'),
