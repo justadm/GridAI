@@ -57,3 +57,10 @@ Validation already done on canary:
 - healthcheck must explicitly ignore self-signed local TLS for `https://127.0.0.1:18791/healthz`
 - canary was switched to `ollama/gpt-oss:20b-cloud` and reached Docker `healthy`
 - current conservative setup keeps OpenRouter fallbacks until UI/task validation is finished
+
+Suggested external validation path:
+
+- publish the canary on `https://bot.devee.ru:4443/`
+- keep production `https://bot.devee.ru/` on `443` pointing to legacy
+- use the same nginx Basic Auth file and the canary gateway token from the copied state
+- remember to open `4443/tcp` in `ufw` on `msk`

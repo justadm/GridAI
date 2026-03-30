@@ -92,6 +92,39 @@ Recommended next step before cutover:
 2. decide whether to keep OpenRouter fallbacks or go Ollama-only
 3. only after that repoint `bot.devee.ru` from legacy systemd to the Docker canary
 
+## Temporary canary access
+
+To validate the Docker canary externally without touching the production `443` upstream, expose it on a separate TLS port:
+
+- `https://bot.devee.ru:4443/` -> Docker canary on `127.0.0.1:18791`
+- keep `https://bot.devee.ru/` on `443` pointing to legacy `18789`
+
+Why this shape:
+
+- no extra DNS record is required
+- wildcard certificate for `*.devee.ru` already covers `bot.devee.ru`
+- OpenClaw UI can stay mounted at `/` and keep its normal `/gateway` path
+- rollback is trivial: close the extra listener and keep `443` untouched
+
+Expected validation through `4443`:
+
+- browser reaches the OpenClaw control UI after nginx Basic Auth
+- websocket path `/gateway` upgrades successfully
+- chat/task execution uses `ollama/gpt-oss:20b-cloud` as primary
+
+Actual result on `2026-03-30`:
+
+- separate nginx listener was added on `4443`
+- `ufw` was updated to allow `4443/tcp`
+- external check passed: `https://bot.devee.ru:4443/` returns `401 OpenClaw Canary`
+- production `https://bot.devee.ru/` on `443` remains unchanged and still returns `401 OpenClaw`
+
+Operational note:
+
+- legacy gateway on `18789` is already showing OpenRouter free-tier degradation
+- `systemctl status openclaw-gateway` contains repeated `429` and `No available auth profile for openrouter`
+- this makes the Ollama-backed Docker canary not just a migration exercise, but the likely path to restore stable interactive usage
+
 ### Phase 3. Cutover
 
 - repoint nginx `bot.devee.ru` to the Docker canary
