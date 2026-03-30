@@ -12,9 +12,10 @@ const SRCareer = (() => {
     node.innerHTML = html;
   };
   const authEntryUrl = () => {
+    const backUrl = encodeURIComponent(window.location.href);
     const host = window.location.hostname;
-    if (host.endsWith('gridai.loc')) return 'https://auth.gridai.loc/career';
-    if (host.endsWith('gridai.ru')) return 'https://auth.gridai.ru/career';
+    if (host.endsWith('gridai.loc')) return `https://auth.gridai.loc/career?back_url=${backUrl}`;
+    if (host.endsWith('gridai.ru')) return `https://auth.gridai.ru/career?back_url=${backUrl}`;
     return '/career';
   };
 

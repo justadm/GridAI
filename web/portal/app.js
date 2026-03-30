@@ -13,9 +13,9 @@ const SRPortal = (() => {
   };
   const authLoginUrl = () => (
     window.location.hostname.endsWith('gridai.loc')
-      ? 'https://auth.gridai.loc/hiring'
+      ? `https://auth.gridai.loc/hiring?back_url=${encodeURIComponent(window.location.href)}`
       : window.location.hostname.endsWith('gridai.ru')
-        ? 'https://auth.gridai.ru/hiring'
+        ? `https://auth.gridai.ru/hiring?back_url=${encodeURIComponent(window.location.href)}`
         : '/hiring'
   );
 

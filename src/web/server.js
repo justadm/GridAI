@@ -498,6 +498,11 @@ function normalizeIntent(value) {
   return 'career';
 }
 
+function getDefaultAppIntentForUser(user) {
+  const role = String(user?.role || 'viewer').trim().toLowerCase();
+  return role === 'viewer' ? 'career' : 'hiring';
+}
+
 function getIntentFromRequest(req) {
   const host = getRequestHost(req);
   if (isSubdomainHost(host, 'career')) return 'career';
@@ -514,7 +519,7 @@ function getAppOrigin(intent = 'career') {
 }
 
 function getAppHomePath(intent = 'career') {
-  return normalizeIntent(intent) === 'hiring' ? '/hiring/dashboard.html' : '/career/dashboard.html';
+  return normalizeIntent(intent) === 'hiring' ? '/' : '/';
 }
 
 function buildAppUrl(intent = 'career', pathname = '') {
@@ -529,11 +534,51 @@ function authLoginUrl(query = '', intent = 'career') {
   return `${AUTH_URL}${authEntryPath(intent)}${query || ''}`;
 }
 
+function normalizeBackUrlValue(value) {
+  return String(value || '').trim();
+}
+
+function getAllowedBackUrlOrigin(intent = 'career') {
+  const normalizedIntent = normalizeIntent(intent);
+  return normalizedIntent === 'hiring' ? HIRING_URL : CAREER_URL;
+}
+
+function sanitizeBackUrl(rawValue, intent = 'career') {
+  const value = normalizeBackUrlValue(rawValue);
+  if (!value) return '';
+  const allowedOrigin = getAllowedBackUrlOrigin(intent);
+  try {
+    const url = new URL(value, allowedOrigin);
+    if (url.origin !== allowedOrigin) return '';
+    return `${url.origin}${url.pathname}${url.search}${url.hash}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function getBackUrlFromRequest(req, intent = getIntentFromRequest(req)) {
+  const bodyBackUrl = req.body && typeof req.body === 'object' ? req.body.back_url : '';
+  return sanitizeBackUrl(req.query.back_url || bodyBackUrl || '', intent);
+}
+
+function buildAuthRedirectUrl(intent = 'career', backUrl = '') {
+  const normalizedIntent = normalizeIntent(intent);
+  const safeBackUrl = sanitizeBackUrl(backUrl, normalizedIntent);
+  const query = safeBackUrl ? `?back_url=${encodeURIComponent(safeBackUrl)}` : '';
+  return authLoginUrl(query, normalizedIntent);
+}
+
+function resolvePostAuthRedirect(intent = 'career', backUrl = '', fallbackPath = '') {
+  const normalizedIntent = normalizeIntent(intent);
+  const safeBackUrl = sanitizeBackUrl(backUrl, normalizedIntent);
+  return safeBackUrl || buildAppUrl(normalizedIntent, fallbackPath);
+}
+
 function buildLinkedAccountsUrl(intent = 'career', provider = '') {
   const normalizedIntent = normalizeIntent(intent);
   const hash = normalizedIntent === 'hiring' ? '#linked-accounts' : '#profile';
   const marker = provider ? `?linked=${encodeURIComponent(String(provider || '').toLowerCase())}` : '';
-  return buildAppUrl(normalizedIntent, `${getAppHomePath(normalizedIntent)}${marker}${hash}`);
+  return buildAppUrl(normalizedIntent, `/${marker}${hash}`);
 }
 
 function getTelegramBotUsernameForIntent(intent = 'career') {
@@ -1015,6 +1060,7 @@ function buildApiRouter() {
   app.get(`${API_BASE}/auth/oauth/:provider/start`, (req, res) => {
     const provider = String(req.params.provider || '').toLowerCase();
     const intent = getIntentFromRequest(req);
+    const backUrl = getBackUrlFromRequest(req, intent);
     const cfg = getProviderConfig(provider);
     if (!cfg) {
       return res.status(404).json({ error: { code: 'UNKNOWN_PROVIDER', message: 'Unsupported OAuth provider' } });
@@ -1028,7 +1074,8 @@ function buildApiRouter() {
       provider,
       verifier,
       expiresAt: Date.now() + 10 * 60 * 1000,
-      intent
+      intent,
+      backUrl
     });
     const url = buildAuthorizeUrl(cfg, state, challenge);
     const mode = String(req.query.mode || '').toLowerCase();
@@ -1074,19 +1121,26 @@ function buildApiRouter() {
       const resolved = resolveSocialUser(provider, profile, stateRow.intent);
       const user = resolved.user;
       if (!user) {
-        return res.redirect(authLoginUrl(`?oauth_error=${encodeURIComponent(resolved.reason)}`, stateRow.intent));
+        const query = new URLSearchParams({ oauth_error: String(resolved.reason || 'oauth_failed') });
+        const safeBackUrl = sanitizeBackUrl(stateRow.backUrl, stateRow.intent);
+        if (safeBackUrl) query.set('back_url', safeBackUrl);
+        return res.redirect(authLoginUrl(`?${query.toString()}`, stateRow.intent));
       }
       const session = createSession(user.id);
       setSessionCookie(res, session.token, session.expiresAt);
-      return res.redirect(buildAppUrl(stateRow.intent));
+      return res.redirect(resolvePostAuthRedirect(stateRow.intent, stateRow.backUrl));
     } catch (err) {
-      return res.redirect(authLoginUrl(`?oauth_error=${encodeURIComponent(String(err?.message || 'oauth_failed'))}`, stateRow?.intent));
+      const query = new URLSearchParams({ oauth_error: String(err?.message || 'oauth_failed') });
+      const safeBackUrl = sanitizeBackUrl(stateRow?.backUrl, stateRow?.intent);
+      if (safeBackUrl) query.set('back_url', safeBackUrl);
+      return res.redirect(authLoginUrl(`?${query.toString()}`, stateRow?.intent));
     }
   });
 
   app.post(`${API_BASE}/auth/telegram/web-login/start`, (req, res) => {
     const intent = getIntentFromRequest(req);
-    const { requestId, expiresIn } = createWebLoginRequest('telegram', 180, { intent });
+    const backUrl = getBackUrlFromRequest(req, intent);
+    const { requestId, expiresIn } = createWebLoginRequest('telegram', 180, { intent, backUrl });
     res.json({
       requestId,
       botUrl: `https://t.me/${getTelegramBotUsernameForIntent(intent)}?start=login_${requestId}`,
@@ -1135,7 +1189,7 @@ function buildApiRouter() {
     const session = createSession(resolved.user.id);
     setSessionCookie(res, session.token, session.expiresAt);
     consumeWebLoginRequest('telegram', requestId);
-    return res.json({ status: 'authorized', user: resolved.user, redirectUrl: buildAppUrl(intent), intent });
+    return res.json({ status: 'authorized', user: resolved.user, redirectUrl: resolvePostAuthRedirect(intent, state.context?.backUrl), intent });
   });
 
   app.get(`${API_BASE}/me/telegram/link/status`, requireAuth, (req, res) => {
@@ -1178,7 +1232,8 @@ function buildApiRouter() {
 
   app.post(`${API_BASE}/auth/max/web-login/start`, (req, res) => {
     const intent = getIntentFromRequest(req);
-    const { requestId, expiresIn } = createWebLoginRequest('max', 180, { intent });
+    const backUrl = getBackUrlFromRequest(req, intent);
+    const { requestId, expiresIn } = createWebLoginRequest('max', 180, { intent, backUrl });
     const launch = resolveMaxBotLaunch(requestId, intent);
     res.json({ requestId, expiresIn, intent, ...launch });
   });
@@ -1225,7 +1280,7 @@ function buildApiRouter() {
     const session = createSession(resolved.user.id);
     setSessionCookie(res, session.token, session.expiresAt);
     consumeWebLoginRequest('max', requestId);
-    return res.json({ status: 'authorized', user: resolved.user, redirectUrl: buildAppUrl(intent), intent });
+    return res.json({ status: 'authorized', user: resolved.user, redirectUrl: resolvePostAuthRedirect(intent, state.context?.backUrl), intent });
   });
 
   app.get(`${API_BASE}/me/max/link/status`, requireAuth, (req, res) => {
@@ -1356,7 +1411,8 @@ function buildApiRouter() {
     const session = createSession(user.id);
     setSessionCookie(res, session.token, session.expiresAt);
     const intent = getIntentFromRequest(req);
-    res.json({ status: 'ok', user, expires_at: session.expiresAt, intent, redirect_url: buildAppUrl(intent) });
+    const backUrl = getBackUrlFromRequest(req, intent);
+    res.json({ status: 'ok', user, expires_at: session.expiresAt, intent, redirect_url: resolvePostAuthRedirect(intent, backUrl) });
   });
 
   app.post(`${API_BASE}/auth/logout`, requireAuth, (req, res) => {
@@ -1821,6 +1877,11 @@ function startWebServer() {
   app.use(express.json({ limit: '1mb' }));
   app.use((req, res, next) => {
     const host = getRequestHost(req);
+    const cookies = parseCookies(req);
+    const sessionToken = cookies[AUTH_COOKIE_NAME] || null;
+    const sessionUser = sessionToken ? getSessionUser(sessionToken) : null;
+    const originalUrl = req.originalUrl || req.url || '/';
+
     if (isSubdomainHost(host, 'api') && (req.path === '/' || req.path === '')) {
       return res.json({
         service: 'gridai-api',
@@ -1829,19 +1890,35 @@ function startWebServer() {
       });
     }
     if (isSubdomainHost(host, 'auth') && (req.path === '/' || req.path === '/index.html')) {
+      if (sessionUser) {
+        const backUrl = getBackUrlFromRequest(req, getDefaultAppIntentForUser(sessionUser));
+        return res.redirect(resolvePostAuthRedirect(getDefaultAppIntentForUser(sessionUser), backUrl));
+      }
       return res.redirect('/career');
     }
-    if (isSubdomainHost(host, 'career') && (req.path === '/' || req.path === '/index.html')) {
-      return res.redirect('/career/dashboard.html');
+    if (isSubdomainHost(host, 'auth') && (req.path === '/career' || req.path === '/hiring') && sessionUser) {
+      const intent = req.path === '/hiring' ? 'hiring' : 'career';
+      const backUrl = getBackUrlFromRequest(req, intent);
+      return res.redirect(resolvePostAuthRedirect(intent, backUrl));
     }
-    if (isSubdomainHost(host, 'hiring') && (req.path === '/' || req.path === '/index.html')) {
-      return res.redirect('/hiring/dashboard.html');
+    if (isSubdomainHost(host, 'career') && (req.path === '/career' || req.path === '/career/' || req.path === '/career/dashboard.html' || req.path === '/dashboard.html' || req.path === '/index.html')) {
+      return res.redirect('/');
+    }
+    if (isSubdomainHost(host, 'hiring') && (req.path === '/hiring' || req.path === '/hiring/' || req.path === '/hiring/dashboard.html' || req.path === '/dashboard.html' || req.path === '/index.html')) {
+      return res.redirect('/');
+    }
+    if (isSubdomainHost(host, 'career') && !sessionUser) {
+      return res.redirect(buildAuthRedirectUrl('career', `${CAREER_URL}${originalUrl}`));
+    }
+    if (isSubdomainHost(host, 'hiring') && !sessionUser) {
+      return res.redirect(buildAuthRedirectUrl('hiring', `${HIRING_URL}${originalUrl}`));
     }
     if (isSubdomainHost(host, 'admin') && (req.path === '/' || req.path === '/index.html')) {
       return res.redirect('/hiring/settings.html');
     }
     if (isRootHost(host) && req.path.startsWith('/portal')) {
-      return res.redirect(`${HIRING_URL}${req.originalUrl.replace(/^\/portal/, '/hiring')}`);
+      const suffix = req.originalUrl.replace(/^\/portal/, '') || '/';
+      return res.redirect(`${HIRING_URL}${suffix}`);
     }
     if (isRootHost(host) && (req.path === '/login' || req.path === '/sign-in' || req.path === '/signin' || req.path === '/career' || req.path === '/hiring' || req.path.startsWith('/oauth/'))) {
       return res.redirect(`${AUTH_URL}${req.originalUrl}`);
@@ -1882,7 +1959,36 @@ function startWebServer() {
     res.sendFile(path.join(STATIC_DIR, 'privacy.html'));
   });
   app.get('/portal', (_req, res) => {
-    res.redirect('/hiring/dashboard.html');
+    res.redirect('/');
+  });
+  app.get('/', (req, res, next) => {
+    const host = getRequestHost(req);
+    if (isSubdomainHost(host, 'career')) {
+      return res.sendFile(path.join(STATIC_DIR, 'career/dashboard.html'));
+    }
+    if (isSubdomainHost(host, 'hiring')) {
+      return res.sendFile(path.join(STATIC_DIR, 'portal/dashboard.html'));
+    }
+    if (isSubdomainHost(host, 'admin')) {
+      return res.sendFile(path.join(STATIC_DIR, 'portal/settings.html'));
+    }
+    return next();
+  });
+  app.use((req, _res, next) => {
+    const host = getRequestHost(req);
+    if (isSubdomainHost(host, 'career')) {
+      req.url = `/career${req.url}`;
+      return next();
+    }
+    if (isSubdomainHost(host, 'hiring')) {
+      req.url = `/hiring${req.url}`;
+      return next();
+    }
+    if (isSubdomainHost(host, 'admin')) {
+      req.url = `/hiring${req.url}`;
+      return next();
+    }
+    return next();
   });
   app.use('/hiring', express.static(path.join(STATIC_DIR, 'portal')));
   app.use('/career', express.static(path.join(STATIC_DIR, 'career')));

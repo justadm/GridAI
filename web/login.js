@@ -33,6 +33,19 @@ function syncIntentInUrl(intent) {
   window.history.replaceState({}, '', `${window.location.pathname}?${query}`);
 }
 
+function getBackUrl() {
+  const params = new URLSearchParams(window.location.search);
+  return String(params.get('back_url') || '').trim();
+}
+
+function withBackUrl(url) {
+  const backUrl = getBackUrl();
+  if (!backUrl) return url;
+  const nextUrl = new URL(url, window.location.origin);
+  nextUrl.searchParams.set('back_url', backUrl);
+  return nextUrl.toString();
+}
+
 function getAuthOrigin() {
   return window.location.hostname === 'auth.gridai.ru' || window.location.hostname === 'auth.gridai.loc'
     ? window.location.origin
@@ -51,7 +64,7 @@ function getAppOrigin(intent = getIntent()) {
 }
 
 function getAppHome(intent = getIntent()) {
-  return intent === 'hiring' ? '/hiring/dashboard.html' : '/career/dashboard.html';
+  return '/';
 }
 
 const providerMeta = {
@@ -157,7 +170,7 @@ async function startBotLogin(kind) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ intent })
+    body: JSON.stringify({ intent, back_url: getBackUrl() })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -201,7 +214,11 @@ function renderOAuthProviders(items) {
     button.className = 'sr-provider-btn';
     button.innerHTML = `<span class="sr-provider-icon">${meta.icon}</span><span>Продолжить через ${meta.label}</span>`;
     if (mode === 'oauth') {
-      button.href = `${getAuthOrigin()}${apiBase}/auth/oauth/${provider}/start?intent=${encodeURIComponent(getIntent())}`;
+      const oauthUrl = new URL(`${getAuthOrigin()}${apiBase}/auth/oauth/${provider}/start`);
+      oauthUrl.searchParams.set('intent', getIntent());
+      const backUrl = getBackUrl();
+      if (backUrl) oauthUrl.searchParams.set('back_url', backUrl);
+      button.href = oauthUrl.toString();
     } else {
       button.type = 'button';
       button.addEventListener('click', () => {
@@ -257,7 +274,7 @@ document.querySelectorAll('[data-auth-intent]').forEach((node) => {
   const intent = String(node.getAttribute('data-auth-intent') || '');
   node.classList.toggle('active', intent === currentIntent);
   node.addEventListener('click', () => {
-    window.location.href = `${getAuthOrigin()}/${intent}`;
+    window.location.href = withBackUrl(`${getAuthOrigin()}/${intent}`);
   });
 });
 
@@ -308,7 +325,7 @@ loginForm.addEventListener('submit', async (e) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ email, intent: currentIntent })
+    body: JSON.stringify({ email, intent: currentIntent, back_url: getBackUrl() })
   });
   const data = await res.json();
   if (!res.ok) {
@@ -329,7 +346,7 @@ verifyForm.addEventListener('submit', async (e) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ token, intent: currentIntent })
+    body: JSON.stringify({ token, intent: currentIntent, back_url: getBackUrl() })
   });
   const data = await res.json();
   if (!res.ok) {
