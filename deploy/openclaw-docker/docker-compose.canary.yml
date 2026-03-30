@@ -1,0 +1,30 @@
+services:
+  openclaw-gateway-canary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.3.28}
+    image: openclaw-gateway:${OPENCLAW_VERSION:-2026.3.28}
+    network_mode: host
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      TZ: ${OPENCLAW_TZ:-Europe/Moscow}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+    volumes:
+      - ${OPENCLAW_STATE_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+    command:
+      - gateway
+      - --bind
+      - "${OPENCLAW_GATEWAY_BIND:-loopback}"
+      - --port
+      - "${OPENCLAW_GATEWAY_PORT:-18791}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('https://127.0.0.1:18791/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

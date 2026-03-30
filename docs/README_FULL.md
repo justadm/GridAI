@@ -257,6 +257,7 @@ docker compose logs --tail 50 web
 - разбор инцидента `502`: `docs/INCIDENT_2026-03-30_GRIDAI_RU_502.md`
 - правила роутинга поддоменов и меню: `docs/ROUTING_2026-03-30_SUBDOMAINS.md`
 - автоматическая уборка контейнерного мусора на `msk`: `docs/OPS_CONTAINER_CLEANUP_MSK.md`
+- миграция OpenClaw на `msk`: `docs/OPENCLAW_MIGRATION_MSK.md`
 Разбор инцидента с таким отказом: [INCIDENT_2026-03-30_GRIDAI_RU_502.md](./INCIDENT_2026-03-30_GRIDAI_RU_502.md).
 
 Важно:
