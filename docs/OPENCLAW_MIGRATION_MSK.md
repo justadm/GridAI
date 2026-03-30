@@ -27,7 +27,7 @@ Current OpenClaw config uses only OpenRouter free models:
 
 Current Ollama on `msk` is already running and exposes `0.0.0.0:11434`.
 
-Installed Ollama models:
+Installed Ollama models at migration start:
 
 - `gpt-oss:20b-cloud`
 - `qwen3.5:397b-cloud`
@@ -151,7 +151,7 @@ Root cause of the timeout:
   - injected workspace context chars: about `13k`
 - small local models on CPU do not complete a useful assistant turn within the configured timeout under this prompt/tool load
 
-Operational conclusion:
+Operational conclusion at that point:
 
 - do not cut over `https://bot.devee.ru/` or Telegram to Docker canary yet
 - keep legacy on `443` and Telegram until one of the following is done:
@@ -164,6 +164,69 @@ Operational conclusion:
 - repoint nginx `bot.devee.ru` to the Docker canary
 - stop legacy `openclaw-gateway.service`
 - keep legacy state and service available for rollback
+
+## Final cutover result on `2026-03-30`
+
+The cutover was completed after reducing the OpenClaw prompt and tool load enough for a local Ollama model to answer on current `msk` hardware.
+
+What changed in the Docker canary state:
+
+- switched the default model to local `ollama/qwen2.5:1.5b`
+- kept fallback `ollama/qwen2.5:0.5b`
+- reduced tool surface to a minimal profile:
+  - `read`
+  - `edit`
+  - `write`
+  - `session_status`
+- disabled bundled skills injection
+- switched the workspace to a minimal dedicated directory:
+  - `/home/node/.openclaw/workspace-lite`
+- increased agent timeout to `90s`
+- limited concurrency to `1`
+
+Prompt reduction after the lightweight profile:
+
+- system prompt chars: about `8k`
+- injected workspace chars: about `1k`
+- tools schema chars: about `3.6k`
+
+This is materially smaller than the earlier profile that was timing out with:
+
+- system prompt chars: about `26k`
+- tools schema chars: about `23k`
+- workspace chars: about `13k`
+
+Operational cutover actions on server:
+
+- enabled `channels.telegram.enabled = true` in Docker canary state
+- repointed nginx `bot.devee.ru` from legacy `127.0.0.1:18789` to Docker canary `127.0.0.1:18791`
+- replaced the hardcoded gateway bearer token in nginx with the canary token
+- stopped legacy `openclaw-gateway.service`
+- kept legacy install and state on disk for rollback
+
+Production verification after cutover:
+
+- `systemctl is-active openclaw-gateway` -> `inactive`
+- `docker ps` shows `openclaw-docker-openclaw-gateway-canary-1` -> `healthy`
+- `curl -skI https://bot.devee.ru/` -> `HTTP/2 401` with `Basic realm="OpenClaw"`
+- `curl -skI https://bot.devee.ru:4443/` -> `HTTP/1.1 401` with `Basic realm="OpenClaw Canary"`
+- Docker logs show Telegram provider start:
+  - `[telegram] [default] starting provider (@my_sec_assistant_bot)`
+- explicit outbound Telegram smoke succeeded:
+  - `openclaw message send --channel telegram --target 13903713 ...`
+  - container logs confirmed `sendMessage ok chat=13903713`
+- end-to-end agent smoke with delivery also succeeded:
+  - `openclaw agent --agent main --session-id tg-cutover-smoke-20260330-1219 --channel telegram --reply-channel telegram --reply-to 13903713 --deliver --message "Ответь только pong" --json --timeout 90`
+  - result payload: `pong`
+  - provider: `ollama`
+  - model: `qwen2.5:1.5b`
+  - duration: about `68.5s`
+
+Residual known issue:
+
+- direct embedded `openclaw agent --local` smoke can still collide with a live gateway session lock and produce `LiveSessionModelSwitchError`
+- this did not block the production cutover because the real delivery path through Telegram completed successfully
+- if needed later, session routing and lock handling should be cleaned separately; it is no longer a cutover blocker
 
 ## Why not switch to Ollama immediately
 
