@@ -14,7 +14,9 @@
 Серверный контур вынесен в отдельный каталог:
 
 - `/opt/container-cleanup/container_cleanup.sh`
+- `/opt/container-cleanup/README.md`
 - optional env: `/opt/container-cleanup/.env`
+- env template: `/opt/container-cleanup/.env.example`
 
 Это сделано специально, чтобы сервис не выглядел частью `GridAI`.
 
@@ -24,6 +26,11 @@
 - `/opt/GridAI/.env`
 - `/etc/systemd/system/b24-remote-testing.service`
 - `/opt/tg-notify/.env`
+
+Важно:
+
+- основной рабочий путь для продовой конфигурации — именно `/opt/container-cleanup/.env`
+- fallback-источники нужны только как резерв, а не как основной способ маршрутизации уведомлений
 
 ## Порог
 
