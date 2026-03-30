@@ -240,6 +240,7 @@ docker compose up -d --build web
 - не используйте контейнерный `nginx` profile;
 - подключайте хостовый nginx к `127.0.0.1:13001`;
 - готовый шаблон: `deploy/nginx/gridai.ru.conf`.
+- важно: хостовый `nginx` должен разруливать домен, TLS и proxy_pass, а внутренние маршруты web-приложения должны жить в `src/web/server.js`, а не в rewrite-правилах `nginx`.
 
 Быстрая prod-проверка после деплоя:
 ```bash
@@ -250,6 +251,11 @@ docker compose logs --tail 50 web
 ```
 
 Если снаружи виден `502`, а `/healthz` у хостового `nginx` отвечает `200`, сначала проверьте именно upstream на `127.0.0.1:13001` и состояние контейнера `web`.
+
+Дополнительно по web-routing:
+
+- разбор инцидента `502`: `docs/INCIDENT_2026-03-30_GRIDAI_RU_502.md`
+- правила роутинга поддоменов и меню: `docs/ROUTING_2026-03-30_SUBDOMAINS.md`
 Разбор инцидента с таким отказом: [INCIDENT_2026-03-30_GRIDAI_RU_502.md](./INCIDENT_2026-03-30_GRIDAI_RU_502.md).
 
 Важно:

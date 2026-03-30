@@ -39,6 +39,15 @@ docker compose logs --tail 50 bot
 curl -sI http://127.0.0.1:13001/
 curl -skI https://gridai.ru/
 ```
+- [ ] Если менялся web-routing или меню, дополнительно проверить:
+```bash
+curl -skI https://admin.gridai.ru/settings/
+curl -skI https://admin.gridai.ru/reports/
+curl -skI https://career.gridai.ru/
+curl -skI https://hiring.gridai.ru/roles/
+curl -sk https://admin.gridai.ru/settings/ | rg 'href="[^"]+"'
+```
+- [ ] Убедиться, что хостовый `nginx` не содержит route-specific rewrite для `career/hiring/admin`; внутренние пути должны обслуживаться приложением.
 
 ## E. Тесты перед запуском
 - [ ] `/status` — `USE_MOCKS=false`.
@@ -51,3 +60,4 @@ curl -skI https://gridai.ru/
 - [ ] При падениях web сначала проверять listener `127.0.0.1:13001`.
 - [ ] При restart loop контейнеров смотреть `docker compose logs -f web bot`.
 - [ ] Разбор инцидента `502`: `docs/INCIDENT_2026-03-30_GRIDAI_RU_502.md`.
+- [ ] Разбор роутинга поддоменов и меню: `docs/ROUTING_2026-03-30_SUBDOMAINS.md`.
