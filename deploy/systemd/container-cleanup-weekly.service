@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly Docker image and volume cleanup with Telegram report
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/scripts/container_cleanup.sh weekly 85
+

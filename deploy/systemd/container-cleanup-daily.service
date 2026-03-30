@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily Docker builder cleanup with Telegram report
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/scripts/container_cleanup.sh daily 85
+
