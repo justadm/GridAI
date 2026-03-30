@@ -241,6 +241,17 @@ docker compose up -d --build web
 - подключайте хостовый nginx к `127.0.0.1:13001`;
 - готовый шаблон: `deploy/nginx/gridai.ru.conf`.
 
+Быстрая prod-проверка после деплоя:
+```bash
+docker compose ps
+curl -sI http://127.0.0.1:13001/
+curl -skI https://gridai.ru/
+docker compose logs --tail 50 web
+```
+
+Если снаружи виден `502`, а `/healthz` у хостового `nginx` отвечает `200`, сначала проверьте именно upstream на `127.0.0.1:13001` и состояние контейнера `web`.
+Разбор инцидента с таким отказом: [INCIDENT_2026-03-30_GRIDAI_RU_502.md](./INCIDENT_2026-03-30_GRIDAI_RU_502.md).
+
 Важно:
 - База SQLite хранится в `./data` (volume).
 - Для bot и web используйте одинаковый `.env`.

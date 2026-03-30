@@ -3,28 +3,37 @@ const path = require('path');
 
 const PID_PATH = '/tmp/gridai-bot.pid';
 
-function ensureSingleInstance() {
-  if (fs.existsSync(PID_PATH)) {
-    const pid = Number(fs.readFileSync(PID_PATH, 'utf8')) || 0;
-    if (pid > 0) {
+function ensureSingleInstance(options = {}) {
+  const pidPath = options.pidPath || PID_PATH;
+  const proc = options.processRef || process;
+
+  if (fs.existsSync(pidPath)) {
+    const pid = Number(fs.readFileSync(pidPath, 'utf8')) || 0;
+    if (pid > 0 && pid !== proc.pid) {
       try {
-        process.kill(pid, 0);
-        console.error(`Bot already running with pid ${pid}. Exiting.`);
-        process.exit(1);
+        proc.kill(pid, 0);
       } catch (_) {
         // stale pid file
+        fs.writeFileSync(pidPath, String(proc.pid));
+        return attachCleanup(pidPath, proc);
       }
+      console.error(`Bot already running with pid ${pid}. Exiting.`);
+      proc.exit(1);
     }
   }
-  fs.writeFileSync(PID_PATH, String(process.pid));
+  fs.writeFileSync(pidPath, String(proc.pid));
+  attachCleanup(pidPath, proc);
+}
+
+function attachCleanup(pidPath, proc) {
   const cleanup = () => {
-    if (fs.existsSync(PID_PATH)) {
-      try { fs.unlinkSync(PID_PATH); } catch (_) {}
+    if (fs.existsSync(pidPath)) {
+      try { fs.unlinkSync(pidPath); } catch (_) {}
     }
   };
-  process.on('exit', cleanup);
-  process.on('SIGINT', () => { cleanup(); process.exit(0); });
-  process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+  proc.on('exit', cleanup);
+  proc.on('SIGINT', () => { cleanup(); proc.exit(0); });
+  proc.on('SIGTERM', () => { cleanup(); proc.exit(0); });
 }
 
 function ensureEnvFile() {
@@ -35,19 +44,19 @@ function ensureEnvFile() {
   }
 }
 
-ensureSingleInstance();
 ensureEnvFile();
 require('dotenv').config();
 
-const { initDb } = require('./db');
-const { startBot } = require('./bot/bot');
-const { startWebServer } = require('./web/server');
-
 function main() {
+  const { initDb } = require('./db');
+  const { startBot } = require('./bot/bot');
+  const { startWebServer } = require('./web/server');
+
   initDb();
   const disableBot = String(process.env.DISABLE_BOT || '').toLowerCase() === 'true';
   const disableWeb = String(process.env.DISABLE_WEB || '').toLowerCase() === 'true';
   if (!disableBot) {
+    ensureSingleInstance();
     const jobsToken = process.env.TELEGRAM_BOT_TOKEN_JOBS;
     const hrToken = process.env.TELEGRAM_BOT_TOKEN_HR;
     const legacyToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -68,4 +77,12 @@ function main() {
   if (!disableWeb) startWebServer();
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  ensureSingleInstance,
+  ensureEnvFile,
+  main
+};

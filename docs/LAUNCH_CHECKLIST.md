@@ -21,22 +21,23 @@
 ## D. Deploy
 - [ ] Клонировать репо:
 ```bash
-git clone git@github.com:justadm/gridai.git /opt/gridai
-cd /opt/gridai
+git clone git@github.com:justadm/gridai.git /opt/GridAI
+cd /opt/GridAI
 ```
-- [ ] `npm install`
+- [ ] Выбрать один способ запуска и не смешивать старый `systemd` сценарий с docker-сценарием.
+- [ ] Для текущего прода использовать `docker compose`.
 - [ ] Настроить `.env`
-- [ ] Установить systemd unit (system‑node):
+- [ ] Поднять сервисы:
 ```bash
-sudo cp /opt/gridai/deploy/gridai.systemnode.service /etc/systemd/system/gridai.service
-sudo systemctl daemon-reload
-sudo systemctl enable gridai
-sudo systemctl start gridai
+docker compose -f docker-compose.yml -f docker-compose.msk.yml up -d --build
 ```
 - [ ] Проверить статус:
 ```bash
-sudo systemctl status gridai
-sudo tail -f /var/log/gridai.log
+docker compose ps
+docker compose logs --tail 50 web
+docker compose logs --tail 50 bot
+curl -sI http://127.0.0.1:13001/
+curl -skI https://gridai.ru/
 ```
 
 ## E. Тесты перед запуском
@@ -47,4 +48,6 @@ sudo tail -f /var/log/gridai.log
 
 ## F. Мониторинг и откат
 - [ ] Быстрый откат: `USE_MOCKS=true`, перезапуск.
-- [ ] При падениях — смотреть `/var/log/gridai.log`.
+- [ ] При падениях web сначала проверять listener `127.0.0.1:13001`.
+- [ ] При restart loop контейнеров смотреть `docker compose logs -f web bot`.
+- [ ] Разбор инцидента `502`: `docs/INCIDENT_2026-03-30_GRIDAI_RU_502.md`.
