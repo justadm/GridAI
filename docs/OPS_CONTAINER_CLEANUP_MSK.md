@@ -11,7 +11,19 @@
 - ежедневный `builder prune`
 - еженедельный `image prune` + `volume prune` только при высоком заполнении диска
 
-Оба режима отправляют отчет в Telegram через `/opt/tg-notify/.env`.
+Серверный контур вынесен в отдельный каталог:
+
+- `/opt/container-cleanup/container_cleanup.sh`
+- optional env: `/opt/container-cleanup/.env`
+
+Это сделано специально, чтобы сервис не выглядел частью `GridAI`.
+
+Отчет в Telegram берется из первого подходящего источника:
+
+- `/opt/container-cleanup/.env`
+- `/opt/GridAI/.env`
+- `/etc/systemd/system/b24-remote-testing.service`
+- `/opt/tg-notify/.env`
 
 ## Порог
 
@@ -30,7 +42,7 @@
 Команда:
 
 ```bash
-/opt/scripts/container_cleanup.sh daily 85
+/opt/container-cleanup/container_cleanup.sh daily 85
 ```
 
 Что делает:
@@ -43,7 +55,7 @@
 Команда:
 
 ```bash
-/opt/scripts/container_cleanup.sh weekly 85
+/opt/container-cleanup/container_cleanup.sh weekly 85
 ```
 
 Что делает:
@@ -72,8 +84,8 @@
 systemctl status container-cleanup-daily.service --no-pager
 systemctl status container-cleanup-weekly.service --no-pager
 systemctl list-timers --all | rg 'container-cleanup'
-sudo /opt/scripts/container_cleanup.sh daily 85
-sudo /opt/scripts/container_cleanup.sh weekly 85
+sudo /opt/container-cleanup/container_cleanup.sh daily 85
+sudo /opt/container-cleanup/container_cleanup.sh weekly 85
 df -h /
 docker system df
 ```

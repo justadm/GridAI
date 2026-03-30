@@ -5,5 +5,4 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/scripts/container_cleanup.sh daily 85
-
+ExecStart=/opt/container-cleanup/container_cleanup.sh daily 85

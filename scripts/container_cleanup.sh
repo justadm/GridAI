@@ -70,6 +70,7 @@ load_telegram_env() {
     sources+=("$TG_ENV_FILE")
   fi
   sources+=(
+    "/opt/container-cleanup/.env"
     "/opt/GridAI/.env"
     "/etc/systemd/system/b24-remote-testing.service"
     "/opt/tg-notify/.env"
