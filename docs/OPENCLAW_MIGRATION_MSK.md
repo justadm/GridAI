@@ -125,6 +125,40 @@ Operational note:
 - `systemctl status openclaw-gateway` contains repeated `429` and `No available auth profile for openrouter`
 - this makes the Ollama-backed Docker canary not just a migration exercise, but the likely path to restore stable interactive usage
 
+## Current blocker on Ollama cutover
+
+Validation on `2026-03-30` showed that the Docker/runtime migration is fine, but the current model situation on `msk` is not yet good enough for production cutover.
+
+What was verified:
+
+- `gpt-oss:20b-cloud` fails from OpenClaw with `401 Unauthorized`
+- direct `ollama run gpt-oss:20b-cloud "ping"` also returns `401 Unauthorized`
+- this means `gpt-oss:20b-cloud` is cloud-backed and not a usable local production model on this server
+- local models `qwen2.5:7b-instruct` and `qwen2.5:0.5b` do answer in raw `ollama run`
+
+What failed inside OpenClaw:
+
+- inherited legacy sessions caused `LiveSessionModelSwitchError` until the canary session store was reset
+- after session cleanup, `qwen2.5:7b-instruct` still timed out under OpenClaw on this VPS
+- `qwen2.5:0.5b` avoided auth problems and CPU thrash, but still timed out under OpenClaw
+
+Root cause of the timeout:
+
+- the effective OpenClaw system prompt is very large for these local models on current hardware
+- measured prompt report for the canary session:
+  - system prompt chars: about `26k`
+  - tools schema chars: about `23k`
+  - injected workspace context chars: about `13k`
+- small local models on CPU do not complete a useful assistant turn within the configured timeout under this prompt/tool load
+
+Operational conclusion:
+
+- do not cut over `https://bot.devee.ru/` or Telegram to Docker canary yet
+- keep legacy on `443` and Telegram until one of the following is done:
+  1. install a stronger truly local Ollama model that this VPS can run in time
+  2. reduce OpenClaw prompt/tool/workspace load for this bot profile
+  3. move OpenClaw to hardware with GPU or materially more CPU/RAM
+
 ### Phase 3. Cutover
 
 - repoint nginx `bot.devee.ru` to the Docker canary
