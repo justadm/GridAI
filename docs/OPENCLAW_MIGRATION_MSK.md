@@ -239,6 +239,7 @@ What was changed:
 
 - stopped and disabled legacy `openclaw-gateway.service`
 - stopped and disabled both watcher timers
+- removed the legacy OpenClaw and watcher unit files from `/etc/systemd/system` entirely and moved them to `/root/disabled-openclaw-units`
 - verified after a control wait that legacy remained `inactive`
 - cleaned the copied Docker agent cache so the active state no longer advertises stale `openrouter` provider data:
   - `agents/main/agent/auth-profiles.json` -> emptied
@@ -249,9 +250,10 @@ Verification after stabilization:
 
 - `curl -skI https://bot.devee.ru/` -> `HTTP/2 401`
 - control check after more than one timer interval:
-  - `systemctl is-active openclaw-gateway` -> `inactive`
+  - `systemctl status openclaw-gateway` -> unit not found
   - `systemctl list-timers --all | grep -i openclaw` -> no active OpenClaw watcher timers
 - active Docker agent cache now contains only `ollama` provider metadata
+- a fresh `50s` Docker log window after removing the legacy unit files contained no new `409 getUpdates conflict`
 
 Note on `/models` and provider cleanup:
 

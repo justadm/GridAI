@@ -70,7 +70,8 @@ Important operational note:
 - on `msk`, legacy OpenClaw also had watchdog timers that could resurrect the old poller:
   - `openclaw-gateway-flap-check.timer`
   - `openclaw-mcp-guard.timer`
-- these must stay disabled during Docker operation, otherwise Telegram polling can split and produce `409 getUpdates conflict`
+- these must not exist in active `systemd` configuration during Docker operation, otherwise Telegram polling can split and produce `409 getUpdates conflict`
+- on `2026-03-30` the legacy unit files were moved out of `/etc/systemd/system` into `/root/disabled-openclaw-units` to prevent external autofix jobs from re-enabling them
 
 Current working model profile on `msk`:
 
