@@ -615,6 +615,50 @@ function getRequestHost(req) {
   return String(req.headers.host || '').toLowerCase().split(':')[0];
 }
 
+function isAppSubdomainHost(host) {
+  return isSubdomainHost(host, 'career') || isSubdomainHost(host, 'hiring') || isSubdomainHost(host, 'admin');
+}
+
+function appendOriginalQuery(req, pathname) {
+  const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+  return `${pathname}${query}`;
+}
+
+function getSubdomainStaticBase(host) {
+  if (isSubdomainHost(host, 'career')) return path.join(STATIC_DIR, 'career');
+  if (isSubdomainHost(host, 'hiring') || isSubdomainHost(host, 'admin')) return path.join(STATIC_DIR, 'portal');
+  return '';
+}
+
+function resolveSubdomainHtmlFile(host, pathname) {
+  const baseDir = getSubdomainStaticBase(host);
+  if (!baseDir) return '';
+  const normalizedPath = String(pathname || '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!normalizedPath) {
+    if (isSubdomainHost(host, 'career')) return path.join(baseDir, 'dashboard.html');
+    if (isSubdomainHost(host, 'admin')) return path.join(baseDir, 'settings.html');
+    return path.join(baseDir, 'dashboard.html');
+  }
+  return path.join(baseDir, `${normalizedPath}.html`);
+}
+
+function canonicalizeSubdomainPath(host, pathname = '/') {
+  const normalizedPath = String(pathname || '/');
+  if (isSubdomainHost(host, 'career') && (normalizedPath === '/career/dashboard.html' || normalizedPath === '/dashboard.html' || normalizedPath === '/dashboard/')) {
+    return '/';
+  }
+  if (isSubdomainHost(host, 'hiring') && (normalizedPath === '/hiring/dashboard.html' || normalizedPath === '/dashboard.html' || normalizedPath === '/dashboard/')) {
+    return '/';
+  }
+  if (isSubdomainHost(host, 'admin') && normalizedPath === '/') {
+    return '/settings/';
+  }
+  if (isAppSubdomainHost(host) && normalizedPath.endsWith('.html')) {
+    return normalizedPath.replace(/\.html$/i, '/');
+  }
+  return normalizedPath;
+}
+
 function isRootHost(host) {
   return ['gridai.ru', 'www.gridai.ru', 'gridai.loc', 'www.gridai.loc'].includes(String(host || '').toLowerCase());
 }
@@ -1901,6 +1945,22 @@ function startWebServer() {
       const backUrl = getBackUrlFromRequest(req, intent);
       return res.redirect(resolvePostAuthRedirect(intent, backUrl));
     }
+    if (isAppSubdomainHost(host) && req.path.endsWith('.html')) {
+      if (isSubdomainHost(host, 'career') && (req.path === '/career/dashboard.html' || req.path === '/dashboard.html')) {
+        return res.redirect(appendOriginalQuery(req, '/'));
+      }
+      if (isSubdomainHost(host, 'hiring') && (req.path === '/hiring/dashboard.html' || req.path === '/dashboard.html')) {
+        return res.redirect(appendOriginalQuery(req, '/'));
+      }
+      const cleanPath = req.path.replace(/\.html$/i, '/');
+      return res.redirect(appendOriginalQuery(req, cleanPath));
+    }
+    if (isSubdomainHost(host, 'career') && req.path === '/dashboard/') {
+      return res.redirect(appendOriginalQuery(req, '/'));
+    }
+    if (isSubdomainHost(host, 'hiring') && req.path === '/dashboard/') {
+      return res.redirect(appendOriginalQuery(req, '/'));
+    }
     if (isSubdomainHost(host, 'career') && (req.path === '/career' || req.path === '/career/' || req.path === '/career/dashboard.html' || req.path === '/dashboard.html' || req.path === '/index.html')) {
       return res.redirect('/');
     }
@@ -1908,13 +1968,13 @@ function startWebServer() {
       return res.redirect('/');
     }
     if (isSubdomainHost(host, 'career') && !sessionUser) {
-      return res.redirect(buildAuthRedirectUrl('career', `${CAREER_URL}${originalUrl}`));
+      return res.redirect(buildAuthRedirectUrl('career', `${CAREER_URL}${canonicalizeSubdomainPath(host, req.path)}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
     }
     if (isSubdomainHost(host, 'hiring') && !sessionUser) {
-      return res.redirect(buildAuthRedirectUrl('hiring', `${HIRING_URL}${originalUrl}`));
+      return res.redirect(buildAuthRedirectUrl('hiring', `${HIRING_URL}${canonicalizeSubdomainPath(host, req.path)}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
     }
     if (isSubdomainHost(host, 'admin') && (req.path === '/' || req.path === '/index.html')) {
-      return res.redirect('/hiring/settings.html');
+      return res.redirect('/settings/');
     }
     if (isRootHost(host) && req.path.startsWith('/portal')) {
       const suffix = req.originalUrl.replace(/^\/portal/, '') || '/';
@@ -1971,6 +2031,16 @@ function startWebServer() {
     }
     if (isSubdomainHost(host, 'admin')) {
       return res.sendFile(path.join(STATIC_DIR, 'portal/settings.html'));
+    }
+    return next();
+  });
+  app.get('*', (req, res, next) => {
+    const host = getRequestHost(req);
+    if (!isAppSubdomainHost(host)) return next();
+    if (!req.path.endsWith('/')) return next();
+    const htmlFile = resolveSubdomainHtmlFile(host, req.path);
+    if (htmlFile && fs.existsSync(htmlFile)) {
+      return res.sendFile(htmlFile);
     }
     return next();
   });
