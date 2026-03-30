@@ -54,3 +54,6 @@ Validation already done on canary:
 
 - OpenClaw `2026.3.28` accepts model ids in the form `ollama/gpt-oss:20b-cloud`
 - this means the model switch can be done later without changing the deployment shape again
+- healthcheck must explicitly ignore self-signed local TLS for `https://127.0.0.1:18791/healthz`
+- canary was switched to `ollama/gpt-oss:20b-cloud` and reached Docker `healthy`
+- current conservative setup keeps OpenRouter fallbacks until UI/task validation is finished

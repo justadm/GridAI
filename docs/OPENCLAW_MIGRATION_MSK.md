@@ -56,6 +56,42 @@ Current fact:
 - new OpenClaw canary accepts `ollama/gpt-oss:20b-cloud` as a valid model id
 - so there is no syntax blocker for moving from OpenRouter to Ollama later
 
+### Phase 2a. Ollama canary
+
+Target for the first Ollama-backed canary step:
+
+- switch only the Docker canary default model to `ollama/gpt-oss:20b-cloud`
+- keep legacy production gateway on OpenRouter and systemd untouched
+- keep Telegram disabled in canary to avoid duplicate bot traffic
+- verify that Docker health reflects the real gateway state
+
+Important note:
+
+- the gateway exposes HTTPS with an auto-generated local certificate
+- Docker healthcheck must ignore local self-signed TLS, otherwise the container becomes falsely `unhealthy` while `/healthz` still returns `200`
+
+Result on `2026-03-30`:
+
+- canary default model switched to `ollama/gpt-oss:20b-cloud`
+- fallbacks were kept on OpenRouter for rollback safety:
+  - `openrouter/arcee-ai/trinity-mini:free`
+  - `openrouter/qwen/qwen3-next-80b-a3b-instruct:free`
+- Docker healthcheck fixed and canary reached `healthy`
+- gateway runtime logs confirmed `agent model: ollama/gpt-oss:20b-cloud`
+- local `https://127.0.0.1:18791/healthz` returned `200 OK`
+- legacy production gateway on `18789` was not touched
+
+Observed caveat:
+
+- even with Ollama as primary, OpenClaw still performs some provider bootstrap work and prints non-fatal noise like `xai-auth bootstrap config fallback`
+- this is not a blocker for the canary, but before public cutover it is worth minimizing unused provider config if we want cleaner startup and fewer external dependencies
+
+Recommended next step before cutover:
+
+1. validate real chat/task execution through the canary UI
+2. decide whether to keep OpenRouter fallbacks or go Ollama-only
+3. only after that repoint `bot.devee.ru` from legacy systemd to the Docker canary
+
 ### Phase 3. Cutover
 
 - repoint nginx `bot.devee.ru` to the Docker canary
