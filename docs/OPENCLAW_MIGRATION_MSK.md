@@ -222,6 +222,59 @@ Production verification after cutover:
   - model: `qwen2.5:1.5b`
   - duration: about `68.5s`
 
+## Post-cutover stabilization on `2026-03-30`
+
+After the cutover, intermittent Telegram non-responses were traced to a second legacy poller that was still getting revived on the same host.
+
+What was found:
+
+- Docker logs showed repeated Telegram polling errors:
+  - `409 Conflict: terminated by other getUpdates request`
+- `openclaw-gateway.service` had become active again even after a manual stop
+- the direct service was not the only problem; two systemd timers were re-arming legacy checks:
+  - `openclaw-gateway-flap-check.timer`
+  - `openclaw-mcp-guard.timer`
+
+What was changed:
+
+- stopped and disabled legacy `openclaw-gateway.service`
+- stopped and disabled both watcher timers
+- verified after a control wait that legacy remained `inactive`
+- cleaned the copied Docker agent cache so the active state no longer advertises stale `openrouter` provider data:
+  - `agents/main/agent/auth-profiles.json` -> emptied
+  - `agents/main/agent/models.json` -> reduced to `ollama` only
+- restarted the Docker gateway after the cache cleanup
+
+Verification after stabilization:
+
+- `curl -skI https://bot.devee.ru/` -> `HTTP/2 401`
+- control check after more than one timer interval:
+  - `systemctl is-active openclaw-gateway` -> `inactive`
+  - `systemctl list-timers --all | grep -i openclaw` -> no active OpenClaw watcher timers
+- active Docker agent cache now contains only `ollama` provider metadata
+
+Note on `/models` and provider cleanup:
+
+- the earlier `openrouter` entries were not coming from the current `openclaw.json`
+- they were coming from copied state cache files under:
+  - `/opt/openclaw-docker/canary/.openclaw/agents/main/agent/auth-profiles.json`
+  - `/opt/openclaw-docker/canary/.openclaw/agents/main/agent/models.json`
+- those caches were cleaned so UI/provider discovery no longer reflects the old OpenRouter setup
+
+## `kimi-k2.5:cloud` evaluation on `msk`
+
+The model was tested through the local Ollama endpoint as a possible quality upgrade over `qwen2.5:1.5b`.
+
+Observed result:
+
+- `ollama run kimi-k2.5:cloud "ping"` -> `401 Unauthorized`
+
+Operational conclusion:
+
+- `kimi-k2.5:cloud` is visible in Ollama model discovery, but it is not usable on this server in the current state
+- this is the same class of problem previously seen with `gpt-oss:20b-cloud`
+- so it is not a valid immediate replacement for the production bot until Ollama Cloud auth is configured correctly
+
 Residual known issue:
 
 - direct embedded `openclaw agent --local` smoke can still collide with a live gateway session lock and produce `LiveSessionModelSwitchError`

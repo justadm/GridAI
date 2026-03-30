@@ -62,11 +62,23 @@ Final production shape after cutover:
 
 - production `https://bot.devee.ru/` on `443` now points to Docker canary on `127.0.0.1:18791`
 - temporary validation entry `https://bot.devee.ru:4443/` remains available as a separate listener
-- legacy systemd OpenClaw is stopped but kept installed for rollback
+- legacy systemd OpenClaw is stopped and left installed only for rollback
 - Telegram polling now runs from the Docker canary
+
+Important operational note:
+
+- on `msk`, legacy OpenClaw also had watchdog timers that could resurrect the old poller:
+  - `openclaw-gateway-flap-check.timer`
+  - `openclaw-mcp-guard.timer`
+- these must stay disabled during Docker operation, otherwise Telegram polling can split and produce `409 getUpdates conflict`
 
 Current working model profile on `msk`:
 
 - primary: `ollama/qwen2.5:1.5b`
 - fallback: `ollama/qwen2.5:0.5b`
 - lightweight workspace and minimal tool profile were required for the VPS to answer in time
+
+Additional note on cloud models:
+
+- `kimi-k2.5:cloud` is discoverable through Ollama on `msk`, but current execution returns `401 Unauthorized`
+- do not switch production to that model until Ollama Cloud authentication is configured and validated
